@@ -4,6 +4,7 @@ rom/*.dmp
 emu/*.sh
 emu/e1100em
 emu/e1100em.exe
+*.bak
 
 # https://byuu.org/projects/libco 
 emu/coro/libco

@@ -1,17 +1,17 @@
-''Disclaimer: the product and the corporation that designed it as presented
+_Disclaimer: the product and the corporation that designed it as presented
 in this document and this repository are fictitious. No identification with
-actual companies (active or defunct), products, persons (living or deceased),
-places or buildings is intended or should be inferred.''
+actual companies (active or defunct), products, persons (living or deceased)
+places or buildings is intended or should be inferred._
 
 # TODO
 
-''This is a fictional computer product designed to simulate a high-end machine
+_This is a fictional computer product designed to simulate a high-end machine
 released in the mid-1980s. This repository includes design notes, an emulator
 and will include the code for the ROM, including the bootloader and DOS, as well
-as a graphical user interface at some point.''
+as a graphical user interface at some point._
 
-''The emulator is written in C and requires a backend (so far SDL2 is implemented)
-and a coroutine library (both [libco](https://byuu.org/projects/libco) and [libaco](https://github.com/hnes/libaco) are supported).''
+_The emulator is written in C and requires a backend (so far SDL2 is implemented)
+and a coroutine library (both [libco](https://byuu.org/projects/libco) and [libaco](https://github.com/hnes/libaco) are supported)._
 
 # Sources
 
