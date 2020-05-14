@@ -27,12 +27,6 @@
 
 .INCLUDE "e1100.asm"
 
-; addresses to software-configurable interrupt handlers
-.DEFINE SWRAMCOP $80FFF1 EXPORT
-.DEFINE SWRAMBRK $80FFF5 EXPORT
-.DEFINE SWRAMIRQ $80FFF9 EXPORT
-.DEFINE SWRAMNMI $80FFFD EXPORT
-
 .MEMORYMAP
 SLOTSIZE $10000
 DEFAULTSLOT 0
@@ -97,12 +91,13 @@ ROMCODE:
 
 .BANK 1 .SLOT 1
 
-.ORG $000000            ; FIXED-WIDTH TEXT CODE
+.ORG $000000            ; FIXED-WIDTH TEXT & KEYBOARD CODE
 
 FIXFONT_START:
         .INCBIN "fixfont.bin"
 FIXFONT_END:
         .INCLUDE "fixtext.asm"
+        .INCLUDE "keyboard.asm"
         
 .BANK 2 .SLOT 2
 

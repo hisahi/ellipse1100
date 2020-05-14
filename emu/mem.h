@@ -36,7 +36,8 @@ SOFTWARE.
 
 #include <stdint.h>
 
-typedef uint8_t BYTE;
+#include "emulator.h"
+
 typedef uint32_t ADDR;
 #define ADDR_MASK 0xFFFFFFU
 #define MASK_ADDR(x) (ADDR_MASK & (x))

@@ -44,5 +44,7 @@ void vpu_cycle(void);
 void vpu_reset(void);
 void vpu_free(void);
 const char* vpu_get_screen(size_t* size);
+BYTE vpu_control_read(void);
+void vpu_control_write(BYTE v);
 
 #endif /* _E1100_VPU_H */

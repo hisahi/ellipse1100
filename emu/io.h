@@ -29,11 +29,17 @@ SOFTWARE.
 #include "cpu.h"
 #include "mem.h"
 
+#define MAKE_KEY_CODE(m, c) ((BYTE)(((m) << 4) | (c)))
+#define EXTRACT_KEY_CODE_ROW(k) ((k) & 7)
+#define EXTRACT_KEY_CODE_COL(k) (((k) >> 4) & 15)
+
 void io_init(void);
 BYTE io_read(ADDR p);
 void io_write(ADDR p, BYTE v);
 void dma_cycle(void);
-void dma_reset(void);
+void io_reset(void);
+void io_keyb_keydown(BYTE k);
+void io_keyb_keyup(BYTE k);
 void io_raise_irq(BYTE s);
 void io_raise_nmi(BYTE s);
 

@@ -82,9 +82,13 @@
         STA     $FFFF&TEXT_FGCOLOR.w
 
         AXY16
+        STZ     IN_SWAPBRK.W
+        STZ     IN_SWAPIRQ.W
+        STZ     IN_SWAPNMI.W
+        STZ     TEXT_CURSORON.W
 
-; set up interrupt trampolies to INTH_RET (PLA; RTI in ROM)
-        LDA     #INTH_RET.w
+; set up interrupt trampolies to INTH_RTI (RTI in ROM)
+        LDA     #INTH_RTI.w
         STA     $FFFF&SWRAMCOP.w
         STA     $FFFF&SWRAMBRK.w
         STA     $FFFF&SWRAMNMI.w
@@ -130,7 +134,7 @@ FIRSTFLOPPYCHECK:
         LDA     #MESSAGE_INSERTDISK.w
         LDX     #BOOT_DISK_MSG_X.w
         LDY     #BOOT_DISK_MSG_Y.w
-        JSL     TEXT_WRSTR
+        JSL     TEXT_WRSTRAT
 
         LDX     #96
         LDA     #PIC_FLOPPY_START
@@ -153,12 +157,16 @@ FIRSTFLOPPYCHECK:
         DEX
         BNE     @FLOPPYLOOP
         PLP
+        
+        JSL     KEYB_RESETBUF
+        JSL     KEYB_UPDKEYS
 
 WAIT_FLOPPY_LOOP:
         JSR     CHECK_FLOPPY_DISK
         BNE     GOT_FLOPPY
 @IRQWAI:
         WAI
+        JSL     KEYB_UPDKEYS
         BRA     WAIT_FLOPPY_LOOP
 
 GOT_FLOPPY:                     ; read first sector of floppy
@@ -172,7 +180,7 @@ GOT_FLOPPY:                     ; read first sector of floppy
         LDA     #MESSAGE_BLANK.w
         LDX     #BOOT_DISK_MSG_X
         LDY     #BOOT_DISK_MSG_Y
-        JSL     TEXT_WRSTR
+        JSL     TEXT_WRSTRAT
         ACC8
 @SEEKLOOP:
         BIT     FLP1STAT
@@ -213,7 +221,7 @@ GOT_FLOPPY_ERR:
 @GENERIC:
         LDX     #BOOT_DISK_MSG_X.w
         LDY     #BOOT_DISK_MSG_Y.w
-        JSL     TEXT_WRSTR
+        JSL     TEXT_WRSTRAT
         ACC8
         JMP     WAIT_FLOPPY_LOOP@IRQWAI
 GOT_FLOPPY_NOBOOT:
@@ -221,7 +229,7 @@ GOT_FLOPPY_NOBOOT:
         LDA     #MESSAGE_DISKNONBOOTABLE.w
         LDX     #BOOT_DISK_MSG_X.w
         LDY     #BOOT_DISK_MSG_Y.w
-        JSL     TEXT_WRSTR
+        JSL     TEXT_WRSTRAT
         ACC8
         JMP     WAIT_FLOPPY_LOOP@IRQWAI
 
@@ -253,6 +261,7 @@ GOT_FLOPPY_CHECK_BOOT:
         LDA     #$0000
         ACC8
         JSR     FAST_SCREEN_FILL
+        JSL     KEYB_RESETBUF
         
         ACC8
         LDA     #$80
@@ -260,7 +269,7 @@ GOT_FLOPPY_CHECK_BOOT:
         PLB
 
         AXY16
-        LDA     #$8000
+        LDA     #$0000
         PHA
         PLD
         LDA     #$03FF.w
@@ -303,3 +312,4 @@ MESSAGE_DISKNONBOOTABLE:
         .DB     "  INSERT BOOT DISK  ",0
 MESSAGE_DISKNOTVALID:
         .DB     "     DISK ERROR     ",0
+

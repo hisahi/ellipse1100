@@ -16,7 +16,7 @@ and a coroutine library (both [libco](https://byuu.org/projects/libco) and [liba
 # Sources
 
 ## CPU; 65c816 emulation
-* [http://6502.org/tutorials/65c816opcodes.html](65C816 Opcodes by Bruce Clark)
-* [http://www.oxyron.de/html/opcodes816.html](65816 Opcode matrix)
-* [http://nesdev.com/6502_cpu.txt](6502 documentation by John West and Marko Mäkelä)
+* [65C816 Opcodes by Bruce Clark](http://6502.org/tutorials/65c816opcodes.html)
+* [6502 documentation by John West and Marko Mäkelä](http://nesdev.com/6502_cpu.txt)
+* [65816 Opcode matrix](http://www.oxyron.de/html/opcodes816.html)
 

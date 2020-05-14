@@ -74,9 +74,9 @@ const char *disasm_mnemonics[] = {
     _I(BCS ), _I(LDA ), _I(LDA ), _I(LDA ), _I(LDY ), _I(LDA ), _I(LDX ), _I(LDA ), _I(CLV ), _I(LDA ), _I(TSX ), _I(TYX ), _I(LDY ), _I(LDA ), _I(LDX ), _I(LDA ), 
 
     _I(CPY ), _I(CMP ), _I(REP ), _I(CMP ), _I(CPY ), _I(CMP ), _I(DEC ), _I(CMP ), _I(INY ), _I(CMP ), _I(DEX ), _I(WAI ), _I(CPY ), _I(CMP ), _I(DEC ), _I(CMP ), 
-    _I(BNE ), _I(CMP ), _I(CMP ), _I(CMP ), _I(PEA ), _I(CMP ), _I(DEC ), _I(CMP ), _I(CLD ), _I(CMP ), _I(PHX ), _I(STP ), _I(JMP ), _I(CMP ), _I(DEC ), _I(CMP ), 
+    _I(BNE ), _I(CMP ), _I(CMP ), _I(CMP ), _I(PEI ), _I(CMP ), _I(DEC ), _I(CMP ), _I(CLD ), _I(CMP ), _I(PHX ), _I(STP ), _I(JMP ), _I(CMP ), _I(DEC ), _I(CMP ), 
     _I(CPX ), _I(SBC ), _I(SEP ), _I(SBC ), _I(CPX ), _I(SBC ), _I(INC ), _I(SBC ), _I(INX ), _I(SBC ), _I(NOP ), _I(XBA ), _I(CPX ), _I(SBC ), _I(INC ), _I(SBC ), 
-    _I(BEQ ), _I(SBC ), _I(SBC ), _I(SBC ), _I(PEI ), _I(SBC ), _I(INC ), _I(SBC ), _I(SED ), _I(SBC ), _I(PLX ), _I(XCE ), _I(JSR ), _I(SBC ), _I(INC ), _I(SBC ),
+    _I(BEQ ), _I(SBC ), _I(SBC ), _I(SBC ), _I(PEA ), _I(SBC ), _I(INC ), _I(SBC ), _I(SED ), _I(SBC ), _I(PLX ), _I(XCE ), _I(JSR ), _I(SBC ), _I(INC ), _I(SBC ),
 };
 
 #define _A(x) disasm_addr_mode_##x

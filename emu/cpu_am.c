@@ -362,13 +362,22 @@ inline void cpu_am_write8(AddrMode* am, REG_8 v)
 
 REG_16 cpu_am_read16(AddrMode* am)
 {
-    ADDR  a;
+    ADDR a;
+    REG_8 tmp;
     if (am->flags & AM_INC_PC) cpu_inc_pc();
-    REG_8 tmp = mem_read(am->v.addr);
+    tmp = mem_read(am->v.addr);
     END_CYCLE_NOABORT();
     cpu_increment_addr(am);
     if (am->flags & AM_INC_PC) cpu_inc_pc();
     return tmp | (mem_read(am->v.addr) << 8);
+}
+
+REG_16 cpu_am_read16_noinc(AddrMode* am)
+{
+    ADDR a = am->v.addr;
+    REG_16 wtmp = cpu_am_read16(am);
+    am->v.addr = a;
+    return wtmp;
 }
 
 void cpu_am_write16(AddrMode* am, REG_16 v)

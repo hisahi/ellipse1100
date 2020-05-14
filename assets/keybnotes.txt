@@ -1,0 +1,50 @@
+Notes
+	CapsLock mechanically locks down! Emulator needs to simulate this
+
+
+Layout
+
+Esc	F1	F2	F3	F4	F5	F6	F7	F8	F9	F10
+~	1!	2"	3#	4$	5%	6^	7&	8*	9(	0)	-_	+=	~`	Bksp	Ins	Del	Help	(	)	/	*
+Tab	Q	W	E	R	T	Y	U	I	O	P	[{	]}						7	8	9	-
+Ctrl	A	S	D	F	G	H	J	K	L	;:	'"	AUX1	CR		AUp			4	5	6	+
+LSh	AUX2	Z	X	C	V	B	N	M	,<	.>	/?		RSh	ALt	ADn	ARt		1	2	3	
+Caps	LAlt	Space									RAlt							0			Ent
+
+
+
+
+Matrix
+
+	0	1	2	3	4	5	6	7	8	9	A	B	C	D	E	F
+0	Esc	F1	F2	F3	F4	F5	F6	F7	F8	F9	F10					Ins
+1	`~	1!	2@	3#	4$	5%	6^	7&	8*	9(	0)	-_	=+	\|	Bksp	Del
+2	Tab	Q	W	E	R	T	Y	U	I	O	P	[{	]}			Help
+3	Ctrl	A	S	D	F	G	H	J	K	L	;:	'"	AUX1	CR		AUp
+4	LSh	AUX2	Z	X	C	V	B	N	M	,<	.>	/?		RSh	ALt	ARt
+5	Caps	LAlt	Space									RAlt				ADn
+6	NP(	NP7	NP4	NP1	NP0				NP)	NP8	NP5	NP2		
+7	NP/	NP9	NP6	NP3					NP*	NP-	NP+	NPEnt
+
+
+
+
+BIOS/DOS Keycodes
+
+	0	1	2	3	4	5	6	7	8	9	A	B	C	D	E	F
+0									Bksp	Tab				CR	Help	Ins
+1	Esc	F1	F2	F3	F4	F5	F6	F7	F8	F9	F10		AUp	ADn	ALt	ARt			
+2	Space	!	"	#	$	%	&	'	(	)	*	+	,	-	.	/
+3	0	1	2	3	4	5	6	7	8	9	:	;	<	=	>	?
+4	@	A	B	C	D	E	F	G	H	I	J	K	L	M	N	O
+5	P	Q	R	S	T	U	V	W	X	Y	Z	[	\	]	^	_
+6	`	a	b	c	d	e	f	g	h	i	j	k	l	m	n	o
+7	p	q	r	s	t	u	v	w	x	y	z	{	|	}	~	Del
+8	
+9	
+A	
+B	
+C	
+D	
+E	
+F	

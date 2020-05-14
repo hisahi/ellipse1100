@@ -11,13 +11,17 @@ ellipse.obj: FORCE
 ellipse.rom: ellipse.obj
 	$(LD) $(LDFLAGS) ellipse.lnk $@
 
-blankimg.obj: blankimg.asm
+floppies/hellow.obj: floppies/hellow.asm
 	$(AS) $(AFLAGS) -o $@ $^
+hellow.img: floppies/hellow.obj
+	$(LD) $(LDFLAGS) hellow.lnk $@
 
-blank.img: blankimg.obj
-	$(LD) $(LDFLAGS) blankimg.lnk $@
+floppies/memopad.obj: floppies/memopad.asm
+	$(AS) $(AFLAGS) -o $@ $^
+memopad.img: floppies/memopad.obj
+	$(LD) $(LDFLAGS) memopad.lnk $@
 
-all: ellipse.rom blank.img
+all: ellipse.rom hellow.img memopad.img
 
 FORCE: ;
 
@@ -25,4 +29,4 @@ FORCE: ;
 .PHONY: clean
 
 clean:
-	rm -f *.obj *.rom *.img
+	rm -f *.obj *.rom *.img floppies/*.obj

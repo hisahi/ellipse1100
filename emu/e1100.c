@@ -50,7 +50,7 @@ void e1100_reset(void)
 {
     cpu_reset();
     vpu_reset();
-    dma_reset();
+    io_reset();
     floppy_reset();
 }
 

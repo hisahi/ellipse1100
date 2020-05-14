@@ -28,6 +28,7 @@ SOFTWARE.
 
 #include "../backend.h"
 #include "../emulator.h"
+#include "../io.h"
 
 struct term_buf {
     char ready;
@@ -46,6 +47,8 @@ static SDL_Texture* texbuffer = NULL;
 static SDL_Thread* termthread = NULL;
 static SDL_mutex* termmutex = NULL;
 static volatile struct term_buf termbuffer;
+
+#define INVALID_KEY ((BYTE)0xFF)
 
 int emu_runtermthread(void* ptr);
 
@@ -104,9 +107,122 @@ void emu_settitle(const char* title)
     SDL_SetWindowTitle(window, title);
 }
 
+BYTE emu_convert_key_code(SDL_Keycode key)
+{
+    switch (key)
+    {
+    case SDLK_ESCAPE:       return MAKE_KEY_CODE( 0, 0);
+    case SDLK_F1:           return MAKE_KEY_CODE( 1, 0);
+    case SDLK_F2:           return MAKE_KEY_CODE( 2, 0);
+    case SDLK_F3:           return MAKE_KEY_CODE( 3, 0);
+    case SDLK_F4:           return MAKE_KEY_CODE( 4, 0);
+    case SDLK_F5:           return MAKE_KEY_CODE( 5, 0);
+    case SDLK_F6:           return MAKE_KEY_CODE( 6, 0);
+    case SDLK_F7:           return MAKE_KEY_CODE( 7, 0);
+    case SDLK_F8:           return MAKE_KEY_CODE( 8, 0);
+    case SDLK_F9:           return MAKE_KEY_CODE( 9, 0);
+    case SDLK_F10:          return MAKE_KEY_CODE(10, 0);
+    case SDLK_INSERT:       return MAKE_KEY_CODE(15, 0);
+    
+    case SDLK_BACKQUOTE:    return MAKE_KEY_CODE( 0, 1);
+    case SDLK_1:            return MAKE_KEY_CODE( 1, 1);
+    case SDLK_2:            return MAKE_KEY_CODE( 2, 1);
+    case SDLK_3:            return MAKE_KEY_CODE( 3, 1);
+    case SDLK_4:            return MAKE_KEY_CODE( 4, 1);
+    case SDLK_5:            return MAKE_KEY_CODE( 5, 1);
+    case SDLK_6:            return MAKE_KEY_CODE( 6, 1);
+    case SDLK_7:            return MAKE_KEY_CODE( 7, 1);
+    case SDLK_8:            return MAKE_KEY_CODE( 8, 1);
+    case SDLK_9:            return MAKE_KEY_CODE( 9, 1);
+    case SDLK_0:            return MAKE_KEY_CODE(10, 1);
+    case SDLK_MINUS:        return MAKE_KEY_CODE(11, 1);
+    case SDLK_EQUALS:       return MAKE_KEY_CODE(12, 1);
+    case SDLK_BACKSLASH:    return MAKE_KEY_CODE(13, 1);
+    case SDLK_BACKSPACE:    return MAKE_KEY_CODE(14, 1);
+    case SDLK_DELETE:       return MAKE_KEY_CODE(15, 1);
+    
+    case SDLK_TAB:          return MAKE_KEY_CODE( 0, 2);
+    case SDLK_q:            return MAKE_KEY_CODE( 1, 2);
+    case SDLK_w:            return MAKE_KEY_CODE( 2, 2);
+    case SDLK_e:            return MAKE_KEY_CODE( 3, 2);
+    case SDLK_r:            return MAKE_KEY_CODE( 4, 2);
+    case SDLK_t:            return MAKE_KEY_CODE( 5, 2);
+    case SDLK_y:            return MAKE_KEY_CODE( 6, 2);
+    case SDLK_u:            return MAKE_KEY_CODE( 7, 2);
+    case SDLK_i:            return MAKE_KEY_CODE( 8, 2);
+    case SDLK_o:            return MAKE_KEY_CODE( 9, 2);
+    case SDLK_p:            return MAKE_KEY_CODE(10, 2);
+    case SDLK_LEFTBRACKET:  return MAKE_KEY_CODE(11, 2);
+    case SDLK_RIGHTBRACKET: return MAKE_KEY_CODE(12, 2);
+    case SDLK_HELP:         
+    case SDLK_HOME:         return MAKE_KEY_CODE(15, 2);
+    
+    case SDLK_LCTRL:   
+    case SDLK_RCTRL:        return MAKE_KEY_CODE( 0, 3);
+    case SDLK_a:            return MAKE_KEY_CODE( 1, 3);
+    case SDLK_s:            return MAKE_KEY_CODE( 2, 3);
+    case SDLK_d:            return MAKE_KEY_CODE( 3, 3);
+    case SDLK_f:            return MAKE_KEY_CODE( 4, 3);
+    case SDLK_g:            return MAKE_KEY_CODE( 5, 3);
+    case SDLK_h:            return MAKE_KEY_CODE( 6, 3);
+    case SDLK_j:            return MAKE_KEY_CODE( 7, 3);
+    case SDLK_k:            return MAKE_KEY_CODE( 8, 3);
+    case SDLK_l:            return MAKE_KEY_CODE( 9, 3);
+    case SDLK_SEMICOLON:    return MAKE_KEY_CODE(10, 3);
+    case SDLK_QUOTE:        return MAKE_KEY_CODE(11, 3);
+    case SDLK_PAGEUP:       return MAKE_KEY_CODE(12, 3);
+    case SDLK_RETURN:       return MAKE_KEY_CODE(13, 3);
+    case SDLK_UP:           return MAKE_KEY_CODE(15, 3);
+    
+    case SDLK_LSHIFT:       return MAKE_KEY_CODE( 0, 4);
+    case SDLK_PAGEDOWN:     return MAKE_KEY_CODE( 1, 4);
+    case SDLK_z:            return MAKE_KEY_CODE( 2, 4);
+    case SDLK_x:            return MAKE_KEY_CODE( 3, 4);
+    case SDLK_c:            return MAKE_KEY_CODE( 4, 4);
+    case SDLK_v:            return MAKE_KEY_CODE( 5, 4);
+    case SDLK_b:            return MAKE_KEY_CODE( 6, 4);
+    case SDLK_n:            return MAKE_KEY_CODE( 7, 4);
+    case SDLK_m:            return MAKE_KEY_CODE( 8, 4);
+    case SDLK_COMMA:        return MAKE_KEY_CODE( 9, 4);
+    case SDLK_PERIOD:       return MAKE_KEY_CODE(10, 4);
+    case SDLK_SLASH:        return MAKE_KEY_CODE(11, 4);
+    case SDLK_RSHIFT:       return MAKE_KEY_CODE(13, 4);
+    case SDLK_LEFT:         return MAKE_KEY_CODE(14, 4);
+    case SDLK_RIGHT:        return MAKE_KEY_CODE(15, 4);
+    
+//  case SDLK_CAPSLOCK:     return MAKE_KEY_CODE( 0, 5);
+            // needs to be handled separately
+    case SDLK_LALT:         return MAKE_KEY_CODE( 1, 5);
+    case SDLK_SPACE:        return MAKE_KEY_CODE( 2, 5);
+    case SDLK_RALT:         return MAKE_KEY_CODE(11, 5);
+    case SDLK_DOWN:         return MAKE_KEY_CODE(15, 5);
+    
+    case SDLK_KP_LEFTPAREN: return MAKE_KEY_CODE( 0, 6);
+    case SDLK_KP_7:         return MAKE_KEY_CODE( 1, 6);
+    case SDLK_KP_4:         return MAKE_KEY_CODE( 2, 6);
+    case SDLK_KP_1:         return MAKE_KEY_CODE( 3, 6);
+    case SDLK_KP_0:         return MAKE_KEY_CODE( 4, 6);
+    case SDLK_KP_RIGHTPAREN:return MAKE_KEY_CODE( 8, 6);
+    case SDLK_KP_8:         return MAKE_KEY_CODE( 9, 6);
+    case SDLK_KP_5:         return MAKE_KEY_CODE(10, 6);
+    case SDLK_KP_2:         return MAKE_KEY_CODE(11, 6);
+    
+    case SDLK_KP_DIVIDE:    return MAKE_KEY_CODE( 0, 7);
+    case SDLK_KP_9:         return MAKE_KEY_CODE( 1, 7);
+    case SDLK_KP_6:         return MAKE_KEY_CODE( 2, 7);
+    case SDLK_KP_3:         return MAKE_KEY_CODE( 3, 7);
+    case SDLK_KP_MULTIPLY:  return MAKE_KEY_CODE( 8, 7);
+    case SDLK_KP_MINUS:     return MAKE_KEY_CODE( 9, 7);
+    case SDLK_KP_PLUS:      return MAKE_KEY_CODE(10, 7);
+    case SDLK_KP_ENTER:     return MAKE_KEY_CODE(11, 7);
+    }
+    return INVALID_KEY;
+}
+
 int emu_running(void)
 {
     SDL_Event e;
+    BYTE tmp;
     while (SDL_PollEvent(&e))
     {
         switch (e.type)
@@ -115,13 +231,35 @@ int emu_running(void)
             ++quit;
             break;
         case SDL_KEYDOWN:
+            // handle caps
+            if ((e.key.keysym.mod & KMOD_CAPS) == KMOD_CAPS)
+                io_keyb_keydown(MAKE_KEY_CODE(0, 5));
+            else
+                io_keyb_keyup(MAKE_KEY_CODE(0, 5));
             if (e.key.keysym.sym == SDLK_F11)
                 emu_grab_input(0);
-            if (e.key.keysym.sym == SDLK_F12)
+            else if (e.key.keysym.sym == SDLK_F12
+                  || e.key.keysym.sym == SDLK_PAUSE)
             {
                 emu_grab_input(0);
                 emu_pause_debug();
             }
+            else
+            {
+                tmp = emu_convert_key_code(e.key.keysym.sym);
+                if (tmp != INVALID_KEY)
+                    io_keyb_keydown(tmp);
+            }
+            break;
+        case SDL_KEYUP:
+            // handle caps
+            if ((e.key.keysym.mod & KMOD_CAPS) == KMOD_CAPS)
+                io_keyb_keydown(MAKE_KEY_CODE(0, 5));
+            else
+                io_keyb_keyup(MAKE_KEY_CODE(0, 5));
+            tmp = emu_convert_key_code(e.key.keysym.sym);
+            if (tmp != INVALID_KEY)
+                io_keyb_keyup(tmp);
             break;
         case SDL_MOUSEBUTTONUP:
             if (!emu_is_grabbed() && e.button.button == SDL_BUTTON_LEFT)

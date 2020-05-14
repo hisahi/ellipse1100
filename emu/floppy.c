@@ -168,9 +168,7 @@ static inline BYTE floppy_status(floppy_drive* drive)
     BYTE s;
     if (drive->status == FLOPPY_STATUS_READING
             || drive->status == FLOPPY_STATUS_WRITING)
-    {
         s |= 0x80;
-    }
     else if (drive->status == FLOPPY_STATUS_ERROR)
         s |= 0x40;
     

@@ -44,6 +44,7 @@ static int pitch;
 static int cur_x, cur_y;
 static int screen_w;
 static int screen_h;
+static int screen_on;
 static BYTE sprite_collisions;
 static unsigned long long frames = 0;
 int vpu_raise_nmi = 0;
@@ -118,6 +119,21 @@ static inline void vpu_vsync(void)
     ++frames;
 }
 
+BYTE vpu_control_read(void)
+{
+    return (vpu_raise_nmi << 2) | (screen_on << 1) | mode;
+}
+
+void vpu_control_write(BYTE v)
+{
+    unsigned newmode;
+    vpu_raise_nmi = 1 & (v >> 2);
+    screen_on = 1 & (v >> 1);
+    newmode = 1 & (v >> 0);
+    if (newmode != mode)
+        vpu_set_mode(newmode);
+}
+
 static inline int vpu_sprite_visible(int n)
 {
     return 0; // TODO
@@ -145,6 +161,8 @@ static inline void vpu_sprite_update_collision(BYTE sc)
 void vpu_reset(void)
 {
     tick = 0;
+    screen_on = 1;
+    vpu_raise_nmi = 0;
 }
 
 inline void vpu_cycle(void)
@@ -160,44 +178,59 @@ inline void vpu_cycle(void)
     }
     if (tick < VPU_PIXELS && dst)
     {
-        cur_x = tick & 511, cur_y = tick >> 9;
-        q = vram[tick];
-        switch (mode)
+        if (!screen_on)
         {
-        case MODE0:
-            for (b = 0; b < 8; ++b)
-                if (vpu_sprite_visible(b))
-                {
-                    if (tmp = vpu_sprite_get_pixel(b))
-                    {
-                        q = tmp;
-                        sc |= (1 << b), ++scb;
-                    }
-                }
-            h = vram[VPU_PALETTE + (q << 1)];
-            l = vram[VPU_PALETTE + (q << 1) + 1];
-            r = (l & 0x1F) << 3; r |= r >> 5;
-            g = ((h & 3) << 6) | ((l & 0xE0) >> 2); g |= g >> 5;
-            b = (h & 0x7C) << 1; b |= b >> 5;
-            PUTPIX(r, g, b);
-            if (tick & 511 == 511) // pitch adjust
-                dst += pitch - 512;
-            break;
-        case MODE1:
-            r = 85 * ((q) & 3);
-            g = 85 * ((q >> 2) & 3);
-            b = 85 * ((q >> 4) & 3);
-            h = 85 * ((q >> 6) & 3);
-            PUTPIX(r, r, r);
-            PUTPIX(g, g, g);
-            PUTPIX(b, b, b);
-            PUTPIX(h, h, h);
-            if (tick & 1023 == 1023) // pitch adjust
-                dst += pitch - 1024;
+            switch (mode)
+            {
+            case MODE1:
+                PUTPIX(0, 0, 0);
+                PUTPIX(0, 0, 0);
+                PUTPIX(0, 0, 0);
+            case MODE0:
+                PUTPIX(0, 0, 0);
+            }
         }
+        else
+        {
+            cur_x = tick & 511, cur_y = tick >> 9;
+            q = vram[tick];
+            switch (mode)
+            {
+            case MODE0:
+                for (b = 0; b < 8; ++b)
+                    if (vpu_sprite_visible(b))
+                    {
+                        if (tmp = vpu_sprite_get_pixel(b))
+                        {
+                            q = tmp;
+                            sc |= (1 << b), ++scb;
+                        }
+                    }
+                h = vram[VPU_PALETTE + (q << 1)];
+                l = vram[VPU_PALETTE + (q << 1) + 1];
+                r = (l & 0x1F) << 3; r |= r >> 5;
+                g = ((h & 3) << 6) | ((l & 0xE0) >> 2); g |= g >> 5;
+                b = (h & 0x7C) << 1; b |= b >> 5;
+                PUTPIX(r, g, b);
+                if (tick & 511 == 511) // pitch adjust
+                    dst += pitch - 512;
+                break;
+            case MODE1:
+                r = 85 * ((q) & 3);
+                g = 85 * ((q >> 2) & 3);
+                b = 85 * ((q >> 4) & 3);
+                h = 85 * ((q >> 6) & 3);
+                PUTPIX(r, r, r);
+                PUTPIX(g, g, g);
+                PUTPIX(b, b, b);
+                PUTPIX(h, h, h);
+                if (tick & 1023 == 1023) // pitch adjust
+                    dst += pitch - 1024;
+            }
 
-        if (scb > 1)
-            vpu_sprite_update_collision(sc);
+            if (scb > 1)
+                vpu_sprite_update_collision(sc);
+        }
     }
 
     ++tick;

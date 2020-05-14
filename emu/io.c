@@ -27,9 +27,12 @@ SOFTWARE.
 #include "io.h"
 #include "e1100.h"
 #include "floppy.h"
+#include "vpu.h"
 
 BYTE active_int;
 dma_channel io_dma[4];
+static BYTE keymatrix[16];
+static BYTE genericint = 0;
 
 void io_raise_irq(BYTE s)
 {
@@ -43,11 +46,25 @@ void io_raise_nmi(BYTE s)
     cpu_nmi();
 }
 
-#define DMA_GET_ENABLE(d) (1 & (d)->control >> 7)
+#define IO_KEYB_IRQ_ENABLED() (1 & genericint)
+
+inline void io_keyb_keydown(BYTE k)
+{
+    keymatrix[EXTRACT_KEY_CODE_COL(k)] |= (1U << EXTRACT_KEY_CODE_ROW(k));
+    if (IO_KEYB_IRQ_ENABLED()) io_raise_irq(0x0c);
+}
+
+inline void io_keyb_keyup(BYTE k)
+{
+    keymatrix[EXTRACT_KEY_CODE_COL(k)] &= ~(1U << EXTRACT_KEY_CODE_ROW(k));
+    if (IO_KEYB_IRQ_ENABLED()) io_raise_irq(0x0c);
+}
+
+#define DMA_GET_ENABLE(d) (1 & ((d)->control >> 7))
 #define DMA_IS_DST_FIXED(d) (1 & ((d)->control >> 3))
 #define DMA_IS_SRC_FIXED(d) (1 & ((d)->control >> 2))
 #define DMA_SHOULD_NMI(d) (1 & ((d)->control >> 1))
-#define DMA_SHOULD_IRQ(d) (1 & ((d)->control >> 0))
+#define DMA_SHOULD_IRQ(d) (1 & (d)->control)
 #define DMA_IS_COPYING(d) (1 & ((d)->status >> 7))
 #define DMA_SET_COPYING(d,v) ((d)->status = ((d)->status & 0x7F) | (v ? 0x80 : 0))
 
@@ -154,9 +171,16 @@ void dma_reset(void)
     io_dma[3].control = io_dma[3].status = 0; io_dma[3].id = 3;
 }
 
-void io_init(void)
+void io_reset(void)
 {
     dma_reset();
+    genericint = 0;
+}
+
+void io_init(void)
+{
+    memset(keymatrix, 0, sizeof(keymatrix));
+    io_reset();
 }
 
 BYTE io_system_status(void)
@@ -174,9 +198,16 @@ BYTE io_read(ADDR p)
     case 1:     return 0x80 | stack_bank;
     case 2:     return active_int;
     case 3:     return 0x7F + (_RAM_SIZE >> 16);
+    case 16: case 17: case 18: case 19:
+    case 20: case 21: case 22: case 23:
+    case 24: case 25: case 26: case 27:
+    case 28: case 29: case 30: case 31:
+        return keymatrix[p & 15];
     case 40: case 41: case 42: case 43:
     case 44: case 45: case 46: case 47:
         return floppy_read((p >> 2) & 1, p & 3);
+    case 48:
+        return vpu_control_read();
     }
 
     if ((p & 192) == 64)
@@ -199,6 +230,8 @@ void io_write(ADDR p, BYTE v)
     case 40: case 41: case 42: case 43:
     case 44: case 45: case 46: case 47:
         floppy_write((p >> 2) & 1, p & 3, v); break;
+    case 48:
+        vpu_control_write(v); break;
     }
 
     if ((p & 192) == 64)

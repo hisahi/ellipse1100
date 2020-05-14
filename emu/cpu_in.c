@@ -278,7 +278,7 @@ void cpu_instruction_ASL(AddrMode am)
     else
     {
         REG_16 tmp16;
-        tmp16 = cpu_am_read16(&am); END_CYCLE();
+        tmp16 = cpu_am_read16_noinc(&am); END_CYCLE();
         tmp16 = alu_asl16(tmp16);
         cpu_am_read8(&am); END_CYCLE();
         UPDATE_NZ_16(tmp16);
@@ -301,7 +301,7 @@ void cpu_instruction_LSR(AddrMode am)
     else
     {
         REG_16 tmp16;
-        tmp16 = cpu_am_read16(&am); END_CYCLE();
+        tmp16 = cpu_am_read16_noinc(&am); END_CYCLE();
         tmp16 = alu_lsr16(tmp16);
         cpu_am_read8(&am); END_CYCLE();
         UPDATE_NZ_16(tmp16);
@@ -324,7 +324,7 @@ void cpu_instruction_ROL(AddrMode am)
     else
     {
         REG_16 tmp16;
-        tmp16 = cpu_am_read16(&am); END_CYCLE();
+        tmp16 = cpu_am_read16_noinc(&am); END_CYCLE();
         tmp16 = alu_rol16(tmp16);
         cpu_am_read8(&am); END_CYCLE();
         UPDATE_NZ_16(tmp16);
@@ -347,7 +347,7 @@ void cpu_instruction_ROR(AddrMode am)
     else
     {
         REG_16 tmp16;
-        tmp16 = cpu_am_read16(&am); END_CYCLE();
+        tmp16 = cpu_am_read16_noinc(&am); END_CYCLE();
         tmp16 = alu_ror16(tmp16);
         cpu_am_read8(&am); END_CYCLE();
         UPDATE_NZ_16(tmp16);
@@ -664,7 +664,7 @@ void cpu_instruction_TRB(AddrMode am)
     else
     {
         REG_16 tmp16;
-        tmp16 = cpu_am_read16(&am); END_CYCLE();
+        tmp16 = cpu_am_read16_noinc(&am); END_CYCLE();
         UPDATE_Z_16(GET_A() & tmp16);
         tmp16 &= ~GET_A();
         cpu_am_read8(&am); END_CYCLE();
@@ -687,7 +687,7 @@ void cpu_instruction_TSB(AddrMode am)
     else
     {
         REG_16 tmp16;
-        tmp16 = cpu_am_read16(&am); END_CYCLE();
+        tmp16 = cpu_am_read16_noinc(&am); END_CYCLE();
         UPDATE_Z_16(GET_A() & tmp16);
         tmp16 |= GET_A();
         cpu_am_read8(&am); END_CYCLE();
@@ -740,7 +740,7 @@ void cpu_instruction_DEC(AddrMode am)
     else
     {
         REG_16 tmp16;
-        tmp16 = cpu_am_read16(&am); END_CYCLE();
+        tmp16 = cpu_am_read16_noinc(&am); END_CYCLE();
         --tmp16;
         cpu_am_read8(&am); END_CYCLE();
         UPDATE_NZ_16(tmp16);
@@ -793,7 +793,7 @@ void cpu_instruction_INC(AddrMode am)
     else
     {
         REG_16 tmp16;
-        tmp16 = cpu_am_read16(&am); END_CYCLE();
+        tmp16 = cpu_am_read16_noinc(&am); END_CYCLE();
         ++tmp16;
         cpu_am_read8(&am); END_CYCLE();
         UPDATE_NZ_16(tmp16);
@@ -947,7 +947,7 @@ void cpu_instruction_PLY(AddrMode am)
 {
     mem_read(CODE_ADDR(regs.PC)); END_CYCLE();
     mem_read(STACK_ADDR()); END_CYCLE();
-    if (A_8b())
+    if (XY_8b())
     {
         SET_Y(cpu_pull8());
         UPDATE_NZ_8(GET_Y());

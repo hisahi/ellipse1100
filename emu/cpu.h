@@ -219,6 +219,7 @@ void cpu_am_decode(AddrMode* am);
 REG_8 cpu_am_read8(AddrMode* am);
 void cpu_am_write8(AddrMode* am, REG_8 v);
 REG_16 cpu_am_read16(AddrMode* am);
+REG_16 cpu_am_read16_noinc(AddrMode* am);
 void cpu_am_write16(AddrMode* am, REG_16 v);
 
 void cpu_instruction_ADC(AddrMode am);

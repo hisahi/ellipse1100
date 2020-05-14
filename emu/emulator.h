@@ -26,6 +26,8 @@ SOFTWARE.
 #ifndef _E1100_EMULATOR_H
 #define _E1100_EMULATOR_H
 
+#include <stdint.h>
+
 #define _DEBUG_MODE 1
 
 #define _CPU_ALWAYS_DEBUG _DEBUG_MODE
@@ -44,6 +46,8 @@ SOFTWARE.
 extern int paused;
 extern int breakpoint_enabled;
 extern unsigned int breakpoint_addr;
+
+typedef uint8_t BYTE;
 
 void emu_fail(const char * reason);
 void emu_pause(void);

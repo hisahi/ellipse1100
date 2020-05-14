@@ -1,5 +1,5 @@
 IO      0-7    SYS
-        IO      0       R       system status                 --------
+        IO      0       R       system status                          --------
                         W       write $FF to reset device
         IO      1       R/W     stack (RAM $0000:$03FF) bank
         IO      2       R       current interrupt device (IRQ or NMI)
@@ -14,9 +14,14 @@ IO      0-7    SYS
                             $10         FLP I
                             $11         FLP II
         IO      3       R       highest available RAM bank
+        IO      4       R/W     interrupt flags for some devices       -------K
+                            (R/W) K: keyboard IRQ when key pressed or depressed
         IO      6       R/W     general external I/O port number
         IO      7       R/W     general external I/O interface
-IO      8-9     TIMER
+IO      8-11    TIMER
+IO      12-15   MOUSE
+IO      16-31   KEYBOARD MATRIX
+        IO      16-31   R       keyboard matrix, see keybnotes.txt
 IO      40-43   FLOPPY I            (floppies: 2 sides, 80 tracks, S sectors,
                                                512 B per sector, 300 rpm)
         IO      40      R/W     floppy status/control         VEiTTTWR
@@ -95,7 +100,7 @@ FLOPPY:
                     guaranteed stuff:
                          K:PC = $80:0008
                          A, X, Y are 16-bit
-                         D = $8000
+                         D = $0000
                          B = $80
                          S = $03FF
                          interrupts are disabled
