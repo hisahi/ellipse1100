@@ -1,0 +1,6 @@
+[submodule "libaco"]
+	path = emu/libaco
+	url = https://github.com/hnes/libaco
+[submodule "emu/coro/libaco"]
+	path = emu/coro/libaco
+	url = https://github.com/hnes/libaco

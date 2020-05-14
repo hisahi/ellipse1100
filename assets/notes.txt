@@ -1,0 +1,219 @@
+IO      0-7    SYS
+        IO      0       R       system status                 --------
+                        W       write $FF to reset device
+        IO      1       R/W     stack (RAM $0000:$03FF) bank
+        IO      2       R       current interrupt device (IRQ or NMI)
+                            $02         VIDEO V-SYNC
+                            $03         VIDEO H-SYNC
+                            $04         AUDIO
+                            $08:$0B     DMA 0-3
+                            $0C         KEYB
+                            $0D         MOUSE
+                            $0E         JOY1
+                            $0F         JOY2
+                            $10         FLP I
+                            $11         FLP II
+        IO      3       R       highest available RAM bank
+        IO      6       R/W     general external I/O port number
+        IO      7       R/W     general external I/O interface
+IO      8-9     TIMER
+IO      40-43   FLOPPY I            (floppies: 2 sides, 80 tracks, S sectors,
+                                               512 B per sector, 300 rpm)
+        IO      40      R/W     floppy status/control         VEiTTTWR
+                                    (R) TTT: 000 if no floppy inserted
+                                         011 for 12 sectors (960 KB)
+                                         100 for 16 sectors (1280 KB)
+                                         101 for 20 sectors (1600 KB)
+                                    (R) V: can read/write - 0 if seeking or
+                                             not set up to read/write
+                                    (R) E: 1 if IO 41 has error, 0 if not
+                                    (W) E: 1 to acknowledge error
+                                    (R) W: 0 if disk is write-protected else 1
+                                    (R/W) i: throw IRQ on error, seek,
+                                             R/W ready, or disk insert/eject
+                                    (W) WR:     00 do nothing
+                                                01 (seek &) read
+                                                10 (seek &) write
+                                                11 only seek
+        IO      41      R/W     floppy sector                 ---sssss
+                                          s between 0-[11,15,19]
+        IO      42      R/W     floppy side/track             STTTTTTT
+                                          T between 0-79
+        IO      43      R/W     floppy interaction
+                                    contains data (when V=1),
+                                    read/write advances
+                                    or error (when E=1)
+                                    sector is only written on disk once
+                                    entirely written here
+IO      44-47   FLOPPY II           same as floppy I
+IO      48-55   VIDEO
+        IO      48      R/W     video control                 -----MSm
+                                    M: 1 if NMI on vsync, 0 if not
+                                    S: 1 if screen off, 0 if screen on
+                                    m: video mode
+                                            0 = 512x384x8 (w/ palette)
+                                            1 = 1024x768x2 (grayscale)
+        IO      49      R/W     sprite visibility, 1 bit per sprite 76543210
+IO      56-63   AUDIO
+IO      64-127  DMA
+        IO      64      R/W     DMA 0 control                 E--rFfMI
+                                    E: 1 to enable, 0 to disable
+                                    r: 1 to reset counter
+                                    F: 1 if target addr should not increase
+                                         when byte copied
+                                    f: 1 if source addr should not increase
+                                         when byte copied
+                                    M: 1 if NMI when done, 0 if not
+                                    I: 1 if IRQ when done, 0 if not
+        IO      65      R       DMA 0 status                  R-------
+                                    R: 1 if still going, 0 if done
+        IO      66      R       DMA 0 COPIED L
+        IO      67      R       DMA 0 COPIED H
+        IO      72      R/W     DMA 0 target "bank" (wraparound!)
+        IO      73      R/W     DMA 0 source "bank" (wraparound!)
+        IO      74      R/W     DMA 0 count L
+        IO      75      R/W     DMA 0 count H
+        IO      76      R/W     DMA 0 target address L
+        IO      77      R/W     DMA 0 target address H
+        IO      78      R/W     DMA 0 source address L
+        IO      79      R/W     DMA 0 source address H
+        IO      80-95   R/W     DMA 1...
+        IO      96-111  R/W     DMA 2...
+        IO      112-127 R/W     DMA 3...
+
+
+FLOPPY:
+     512 B/sector, 12/16/20 sectors, 80 tracks, 2 sides
+               12S = 480 KB/side, 960 KB
+               16S = 640 KB/side, 1280 KB
+               20S = 800 KB/side, 1600 KB
+
+     1st sector is "floppy identification sector"
+          if bootable, 8 first bytes must be 'ELLIPSE@'
+          rest are implementation defined; entire sector loaded into memory
+               at $80:0000 and jumped into ($80:0008)
+                    guaranteed stuff:
+                         K:PC = $80:0008
+                         A, X, Y are 16-bit
+                         D = $8000
+                         B = $80
+                         S = $03FF
+                         interrupts are disabled
+                         not in emulation mode
+          
+          on Ellipse standard disk:
+               last 32 bytes are partition table, entry for four partitions each
+                    $00       partition type
+                    $01       partition flags
+                                   --------
+                    $02:$03   starting track (also includes platter, side, etc.)
+                                   on floppies, highest bit of all is side
+                    $04:$05   ending track (also includes platter, side, etc.)
+                    $06       starting sector
+                    $07       ending sector
+
+
+ELLIPTICAL GRID FILE SYSTEM (EGFS)
+
+     QPTR (4B):          $OO $TT $TT $SS     ; points to anywhere on disk
+          OO    = offset * 2
+          TT TT = track: on floppies, high byte is unused, while low byte is
+                         Sttttttt - 1 bit for side, 7 for tracks
+          SS    = sector
+
+          "INVALID" = $00 $00 $00 $00. never a valid QPTR
+
+     block 1 "FSMB" (file system master block):
+          $000:$004      'EGFS'
+          $004           -------F
+               F:             floppy drive (QPTRs have 8-bit track addresses;
+                                             high track byte is unused)
+          $005           --------
+          $006           --------
+          $007           D-------
+               D:             dirty flag. set to 1 when carrying out operation,
+                                             written back as 0.
+          $010           QPTR to root dir; basically always the second block
+          $020:$027      file system ID
+          $030:$033      total size of this file system
+          $034:$037      free space (only a hint)
+          $1A0:$1FF      FBLK for first 92 tracks
+
+     DATE:
+          $00:$01        YEAR
+          $02            MONTH     (1-12)
+          $03            DAY       (1-31)
+          $04            HOUR      (0-23)
+          $05            MINUTE    (0-59)
+          $06            SECOND    (0-59)
+          $07            SECOND/256     (may not be defined)
+
+     FBLK:
+          one byte per sector for every track for the first sector in
+               that track to be a free block.
+          at the end, a QPTR to next FBLK, or "INVALID" if none
+
+     FREE BLOCK:
+          $00            $FF
+          $01            $FE
+          $02            $00 if final free block on track, else otherwise
+          $03            next free sector on this track, undefined if $02 is 0
+
+
+     directory:
+          consists of dir entries, 32B or 64B each (see "directory entry")
+     
+     directory entry:
+          all entries:
+               $00       = type
+                    $00       = FREE_ENT
+                    $01       = DIR_ROOT
+                    $02       = FILE
+                    $03       = DIR
+                    $04       = FILE_ALLOC
+                    $05       = FILE_INNER
+               $01:$0F   = type-defined
+               $10:$13   = "DOWN"; type-defined
+               $14:$17   = "UP"; QPTR to directory containing this entry
+               $18:$1B   = "RIGHT"; QPTR to next entry in this directory
+               $1C:$1F   = "LEFT"; QPTR to previous entry in this directory
+               $20:$3F   = exist only for FILE
+
+          DIR:
+               $02       = directory flags #1        --------
+               $03       = directory flags #2        --------
+               $04:$0F   = filename (FILENAME.EXT). $0C always '.'
+               DOWN      = QPTR to first entry in this directory, or
+                              "INVALID" if the directory is empty.
+
+          FILE:
+               $02       = file flags #1             --------
+               $03       = file flags #2             --------
+               $04:$0F   = filename (FILENAME.EXT). $0C always '.'
+               DOWN      = FILE_INNER
+
+          FILE_INNER:
+               $02:$05   = number of blocks allocated
+               $06       = file flags #3             -------B
+                                   B = + 256 to $07
+               $07       = number of bytes in last allocated block (low byte)
+               $08:$0F   = last edit DATE
+               DOWN      = QPTR to first FILE_ALLOC or INVALID if none
+               UP        = FILE
+               $18:$1B   = QPTR of first allocated block (O = 0)
+               $1C:$1F   = QPTR of second allocated block (O = 0)
+
+               file size = $28:$2B * 512 + $2C:$2D
+
+          FILE_ALLOC:
+               $00       
+               $04:$07   = QPTR of N+1th allocated block (O = 0)
+               $08:$0B   = QPTR of N+2nd allocated block (O = 0)
+               $0C:$0F   = QPTR of N+3rd allocated block (O = 0)
+               DOWN      = QPTR of N+4th allocated block (O = 0)
+               UP        = FILE_INNER
+               RIGHT     = next FILE_ALLOC or INVALID
+               LEFT      = previous FILE_ALLOC or INVALID
+          
+          DIR_ROOT:
+               same as DIR, but "UP" points to FSMB
