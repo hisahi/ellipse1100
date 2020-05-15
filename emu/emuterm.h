@@ -1,6 +1,6 @@
 /*
 Ellipse Workstation 1100 (fictitious computer) Emulator (e1100em)
-Main emulator header file
+Emulator debug console header file
 
 Copyright (c) 2020 Sampo Hippeläinen (hisahi)
 
@@ -23,36 +23,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef _E1100_EMULATOR_H
-#define _E1100_EMULATOR_H
+#ifndef _E1100_EMUTERM_H
+#define _E1100_EMUTERM_H
 
-#include <stdint.h>
+#include <stdlib.h>
 
-#define _DEBUG_MODE 1
+extern int f1wp, f2wp;
+extern char drive0fn[MAX_PATH_NAME + 1];
+extern char drive1fn[MAX_PATH_NAME + 1];
 
-#define _CPU_ALWAYS_DEBUG _DEBUG_MODE
-#define _WDM_IS_DEBUG _DEBUG_MODE
-#define _INTERRUPT_DEBUG 0
-#define _DMA_DEBUG 0
-#define _FLOPPY_DEBUG 0
-#define SLOWDOWN 4
+extern void save_floppy_media(int drivenum);
+extern int file_is_readonly(const char* fn);
+extern void emu_term_do_line(const char* buf, size_t buflen);
 
-#define MS_PER_S 1000ULL
-#define NS_PER_MS 1000000ULL
-#define NS_PER_S (MS_PER_S*NS_PER_MS)
-
-#define MAX_PATH_NAME 33000
-
-extern int paused;
-extern int breakpoint_enabled;
-extern unsigned int breakpoint_addr;
-
-typedef uint8_t BYTE;
-
-void emu_fail(const char * reason);
-void emu_pause(void);
-void emu_unpause(void);
-void emu_pause_debug(void);
-void emulator_dump_state(void);
-
-#endif /* _E1100_EMULATOR_H */
+#endif /* _E1100_EMUTERM_H */

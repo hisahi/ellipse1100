@@ -54,7 +54,7 @@ IO      44-47   FLOPPY II           same as floppy I
 IO      48-55   VIDEO
         IO      48      R/W     video control                 -----MSm
                                     M: 1 if NMI on vsync, 0 if not
-                                    S: 1 if screen off, 0 if screen on
+                                    S: 1 if screen on, 0 if screen off
                                     m: video mode
                                             0 = 512x384x8 (w/ palette)
                                             1 = 1024x768x2 (grayscale)

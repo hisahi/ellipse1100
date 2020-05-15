@@ -26,6 +26,8 @@ SOFTWARE.
 #ifndef _E1100_VPU_H
 #define _E1100_VPU_H
 
+#include <stdlib.h>
+
 #define VPU_CYC_NTSC 268466
 #define VPU_CYC_PAL 310353
 #define VPU_PIXELS 196608

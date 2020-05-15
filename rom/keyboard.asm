@@ -69,15 +69,23 @@ KEYCODETABLE_SHIFT:
         .DB     $00, $08, $00, $00, $1E, $00, $00, $00
         .DB     $00, $7F, $0E, $1C, $1F, $1D, $00, $00
 ; if caps should apply to char code
-KEYB_APPLY_CAPS_TO_CHAR:
-        .DB     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-        .DB     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-        .DB     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-        .DB     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-        .DB     0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
-        .DB     1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0
-        .DB     0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
-        .DB     1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0
+KEYB_APPLY_CAPS_TO_KEY:
+        .DB     0,0,0,0,0,0,0,0
+        .DB     0,0,1,1,0,0,0,0
+        .DB     0,0,1,1,1,0,0,0
+        .DB     0,0,1,1,1,0,0,0
+        .DB     0,0,1,1,1,0,0,0
+        .DB     0,0,1,1,1,0,0,0
+        .DB     0,0,1,1,1,0,0,0
+        .DB     0,0,1,1,1,0,0,0
+        .DB     0,0,1,1,1,0,0,0
+        .DB     0,0,1,1,0,0,0,0
+        .DB     0,0,1,0,0,0,0,0
+        .DB     0,0,1,0,0,0,0,0
+        .DB     0,0,0,0,0,0,0,0
+        .DB     0,0,0,0,0,0,0,0
+        .DB     0,0,0,0,0,0,0,0
+        .DB     0,0,0,0,0,0,0,0
 
 .DEFINE KEYB_TMP3 $0EEE
 .DEFINE KEYB_TMP2 $0EF0
@@ -110,14 +118,23 @@ KEYB_APPLY_CAPS_TO_CHAR:
         PLD
 .ENDM
 
-; get currently pressed key
+; get currently pressed key in A
+; supply value in A to check key repeat (higher value to repeat slower)
+; supply value in X to apply new repeat value (if A=12, X=10
+;                                               means 2 ticks to repeat again)
 ; carry set if it is a new key
 ; A will be set to 8-bit if it already isn't
 KEYB_GET_PRESSED_KEY:
         ACC8
-        LDA     KEYB_NEWKEYPRESSEDL.L
+        CMP     $800000|KEYB_KEYDOWNTICKS.L
+        BCS     +
+        TXA
+        STA     $800000|KEYB_KEYDOWNTICKS.L
+        SEC
+        BRA     ++
++       LDA     KEYB_NEWKEYPRESSEDL.L
         ASL     A
-        LDA     KEYB_KEYDOWNL.L
+++      LDA     KEYB_KEYDOWNL.L
         RTS
 
 ; reset key data
@@ -217,9 +234,7 @@ KEYB_UPDATE_KEYS:
         PHA                                     ; save old A (remaining bits)
         BIT     KEYB_KEYMODIFIER1               ; check if CAPS applies
         BVC     +                               ; move to (next) + if no caps
-        LDA     KEYCODETABLE.L,X                ; load key's ASCII code
-        TAY                                     ;       into Y
-        LDA     KEYB_APPLY_CAPS_TO_CHAR.W,Y     ; <>$00 if caps should matter
+        LDA     KEYB_APPLY_CAPS_TO_KEY.L,X      ; <>$00 if caps should matter
         BEQ     +                               ; else skip to (next) +
         TXA                                     ; \
         EOR     #$80                            ; | X ^= 0x80
@@ -239,30 +254,24 @@ KEYB_UPDATE_KEYS:
         DEC     A                               ; A = #$FF. key is down
         CPY     #$0080                          ; if Y >= $0080
         BCS     ++++                            ; skip to cache store (++++)
+        CPX     KEYB_KEYDOWNX.W                 ; is "current key" this key?
+        BEQ     ++                              ; if it is, go to (next) ++
         LDA     KEYB_KEYCACHE.W,X               ; get old key cache value
         BNE     ++++                            ; key already down? go to ++++
-        CPX     KEYB_KEYDOWNX.W                 ; is "current key" this key?
-        BEQ     +                               ; if it is, go to (next) +
         STZ     KEYB_KEYDOWNTICKS.W             ; zero out key down ticks
-        STZ     KEYB_KEYDOWNTICKS+1.W           ; as the current key changes
-        BRA     ++                              ; go to ++ (current key store)
-+       INC     KEYB_KEYDOWNTICKS.W         ; increase key down ticks low byte
-        BCC     ++                              ; if low byte <> $00, go to ++
-        LDA     KEYB_KEYDOWNTICKS+1.W           ; load tick high byte
-        BMI     ++                              ; if already >=$80, skip
-        INC     A                               ; increase high byte
-        STA     KEYB_KEYDOWNTICKS+1.W           ; and store back
-++      STY     KEYB_KEYDOWN.W              ; store new current key
+        STY     KEYB_KEYDOWN.W                  ; store new current key
         STX     KEYB_KEYDOWNX.W                 ; and "scan code"
         LDA     #$FF                            ; load #$FF again to store to
-        STA     KEYB_NEWKEYPRESSED.W            ; "new key pressed" as well as
+        STA     KEYB_NEWKEYPRESSED.W            ; "new key pressed"
+        BRA     ++++                            ; skip some redundant insrts
+++      INC     KEYB_KEYDOWNTICKS.W         ; increase key down ticks
+        LDA     #$FF                            ; load #$FF again to store to
         BRA     ++++                            ; cache, and go to ++++
 +++     CPX     KEYB_KEYDOWNX.W             ; key up is "current code"?
         BNE     ++++                            ; if not, skip
         STZ     KEYB_KEYDOWN.W                  ; \ zero out "current code"
-        STZ     KEYB_KEYDOWNX+1.W               ; / 
-        DEC     KEYB_KEYDOWNX+1.W               ; current scan = $FF00 invalid
-++++    LDX     KEYB_TMP2.W                     ; restore original shifted X
+        DEC     KEYB_KEYDOWNX+1.W               ; cur. "scan" = $FFxx (invalid)
+++++    LDX     KEYB_TMP2.W                 ; restore original shifted X
         STA     KEYB_KEYCACHE.W,X               ; store $00 or $FF to cache
         PLA                                     ; restore remaining bits
         INX

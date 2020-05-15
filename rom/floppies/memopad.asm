@@ -46,6 +46,9 @@ BEGINNING:
         ACC16
 
 @LOOP:
+        ACC8
+        LDA     #$14
+        LDX     #$12
         JSL     KEYB_GETPKEY
         BEQ     +
         BCC     +

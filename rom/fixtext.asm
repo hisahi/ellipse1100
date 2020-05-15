@@ -42,6 +42,7 @@
 .DEFINE TEXT_CURSORYL $801012
 .DEFINE TEXT_CURSORTICKS $1014
 .DEFINE TEXT_CURSORON $1016
+.DEFINE TEXT_CURSORMOVED $1018
 ; characters
 .DEFINE TEXT_VRAM_CH $1100
 ; colors
@@ -94,25 +95,7 @@
         TAX
 .ENDM
 
-.ACCU 16
-TEXT_UPDATE_CHARACTER_RAW:
-        ; A = X + Y * 80
-        X_Y_TO_TEXT_VRAM_OFFSET
-
-TEXT_UPDATE_CHARACTER_KNOWN_OFFSET:
-; load font data
-        LDA     TEXT_VRAM_CH,X
-        AND     #$FF.w
-        ASL     A
-        ASL     A
-        ASL     A
-        STA     TEXT_TMP7.W
-        LDA     TEXT_VRAM_CL,X
-        STA     TEXT_TMP1.W
-
-; now use x,y values to compute target screen address and store it to
-;     TEXT_TMP3 (address), TEXT_TMP4 (bank)
-        LDA     TEXT_TMP2.W             ; X coordinate
+.MACRO A_Y_TO_VIDEO_VRAM_OFFSET
         ASL     A                       ; A = A * 6
         STA     TEXT_TMP4.W
         ASL     A
@@ -139,6 +122,31 @@ TEXT_UPDATE_CHARACTER_KNOWN_OFFSET:
         CLC
         ADC     TEXT_TMP3.W             ; A += (X << 3 + 16)
         STA     TEXT_TMP3.W
+.ENDM
+
+.ACCU 16
+TEXT_UPDATE_CHARACTER_AT_CURSOR:
+        LDX     TEXT_CURSORX.W
+        LDY     TEXT_CURSORY.W
+TEXT_UPDATE_CHARACTER_RAW:
+        ; A = X + Y * 80
+        X_Y_TO_TEXT_VRAM_OFFSET
+
+TEXT_UPDATE_CHARACTER_KNOWN_OFFSET:
+; load font data
+        LDA     TEXT_VRAM_CH,X
+        AND     #$FF.w
+        ASL     A
+        ASL     A
+        ASL     A
+        STA     TEXT_TMP7.W
+        LDA     TEXT_VRAM_CL,X
+        STA     TEXT_TMP1.W
+
+; now use x,y values to compute target screen address and store it to
+;     TEXT_TMP3 (address), TEXT_TMP4 (bank)
+        LDA     TEXT_TMP2.W             ; X coordinate
+        A_Y_TO_VIDEO_VRAM_OFFSET
 
         TAY
         LDX     TEXT_TMP7.W
@@ -248,6 +256,24 @@ TEXT_UPDATE_ENTIRE_SCREEN:
         PLP
         RTS
 
+.MACRO TEXT_SCROLL_DMA ARGS BANKS, SRCADDR, DSTADDR, COUNT, FLAGS
+        ; use DMA 0 to move VRAM_CH and VRAM_CL up a row
+        ACC16
+        LDA     #SRCADDR.w
+        STA     DMA0SRC.w
+        LDA     #DSTADDR.w
+        STA     DMA0DST.w
+        LDA     #BANKS.w        ; bank setup
+        STA     DMA0BNKS.w
+        LDA     #COUNT.w        ; copy total of $1E00 - 80 bytes
+        STA     DMA0CNT.w
+        ACC8
+        LDA     #$90|FLAGS.b    ; enable DMA
+        STA     DMA0CTRL.w
+-       BIT     DMA0STAT.w
+        BMI     -
+.ENDM
+
 ; on correct bank
 TEXT_SCROLL_UP_LINE:
         XY16
@@ -258,27 +284,10 @@ TEXT_SCROLL_UP_LINE:
         PHA
         PLB
         SEI                     ; disable interrupts
+
         ; use DMA 0 to move VRAM_CH and VRAM_CL up a row
-        ACC16
-        LDA     #TEXT_VRAM_CH+80.w
-        STA     DMA0SRC.w
-        LDA     #TEXT_VRAM_CH.w
-        STA     DMA0DST.w
-        LDA     #$8080.w        ; bank setup
-        STA     DMA0BNKS.w
-        LDA     #$1DB0.w        ; copy total of $1E00 - 80 bytes
-        STA     DMA0CNT.w
-        ACC8
-        LDA     #$90.b          ; enable DMA
-        STA     DMA0CTRL.w
--       BIT     DMA0STAT.w
-        BMI     -
-        ACC16
+        TEXT_SCROLL_DMA         $8080, TEXT_VRAM_CH+80, TEXT_VRAM_CH, $1DB0, 0
 
-        PLB
-        PLP
-
-        ACC8
         ; make blank row in VRAM_CH and VRAM_CL
         LDX     #80
 @XLOOP:
@@ -287,14 +296,25 @@ TEXT_SCROLL_UP_LINE:
         STZ     TEXT_VRAM_CH+47*80.W,X
         BNE     @XLOOP
 
-        ; update entire screen
-        ACC16
-        ; TODO: optimize. do not update screen via text mode
-        ; just do 6 DMAs instead
-        JMP     TEXT_UPDATE_ENTIRE_SCREEN
+        ; do VRAM scrolling DMA
+        TEXT_SCROLL_DMA         $4040, $1000, $0000, $F000, 0
+        TEXT_SCROLL_DMA         $4140, $0000, $F000, $1000, 0
+        TEXT_SCROLL_DMA         $4141, $1000, $0000, $F000, 0
+        TEXT_SCROLL_DMA         $4241, $0000, $F000, $1000, 0
+        TEXT_SCROLL_DMA         $4242, $1000, $0000, $F000, 0
+        TEXT_SCROLL_DMA         $8042, $FFFF&TEXT_BGCOLOR, $F000, $1000, 4
+
+        PLB
+        PLP
+
+        RTS
 
 TEXT_CURSOR_UPDATE:
         ACC16
+        ;       bring out cursor on next update
+        LDX     #$001F
+        STX     TEXT_CURSORTICKS.W
+        INC     TEXT_CURSORMOVED.W
         LDX     TEXT_CURSORX.W
         BMI     @GOUPLINE
         CPX     #80
@@ -329,14 +349,8 @@ TEXT_WRITE_STRING_CHARACTER:
 .ACCU 8
         STA     TEXT_TMP6.W
 @NOSTA:
-        CMP     #13
-        BEQ     TEXT_WRITE_STRING_CHARACTER_CR
-        CMP     #9
-        BEQ     TEXT_WRITE_STRING_CHARACTER_TAB
-        CMP     #8
-        BEQ     TEXT_WRITE_STRING_CHARACTER_BKSP
-        CMP     #0
-        BEQ     TEXT_WRITE_STRING_CHARACTER_NONE
+        CMP     #32.B
+        BCC     @SPECIAL
         ACC16
 @INNER:
         LDX     TEXT_CURSORX.W
@@ -352,33 +366,65 @@ TEXT_WRITE_STRING_CHARACTER:
         INC     TEXT_CURSORX.W
         JMP     TEXT_CURSOR_UPDATE
         ;       leaves with ACC16
-TEXT_WRITE_STRING_CHARACTER_CR:
-        LDX     TEXT_CURSORX.W
-        LDY     TEXT_CURSORY.W
+@SPECIAL:
         ACC16
-        JSR     TEXT_UPDATE_CHARACTER_RAW
+        AND     #$00FF
+        ASL     A
+        TAX
+        JMP     (TEXT_WRITE_SPECIAL_CHARS.W,X)
+
+TEXT_WRITE_SPECIAL_CHARS:
+        .DW     @NONE        ;  0 \NUL
+        .DW     @NONE        ;  1 ???
+        .DW     @NONE        ;  2 ???
+        .DW     @NONE        ;  3 ???
+        .DW     @NONE        ;  4 ???
+        .DW     @NONE        ;  5 ???
+        .DW     @NONE        ;  6 ???
+        .DW     @NONE        ;  7 ???
+        .DW     @BKSP        ;  8 BKSP
+        .DW     @TAB         ;  9 TAB
+        .DW     @CR          ; 10 LF
+        .DW     @NONE        ; 11 ???
+        .DW     @NONE        ; 12 ???
+        .DW     @CR          ; 13 CR
+        .DW     @NONE        ; 14 ???
+        .DW     @NONE        ; 15 ???
+        .DW     @NONE        ; 16 ???
+        .DW     @NONE        ; 17 ???
+        .DW     @NONE        ; 18 ???
+        .DW     @NONE        ; 19 ???
+        .DW     @NONE        ; 20 ???
+        .DW     @NONE        ; 21 ???
+        .DW     @NONE        ; 22 ???
+        .DW     @NONE        ; 23 ???
+        .DW     @NONE        ; 24 ???
+        .DW     @NONE        ; 25 ???
+        .DW     @NONE        ; 26 ???
+        .DW     @NONE        ; 27 ???
+        .DW     @AUP         ; 28 arrow up
+        .DW     @ADN         ; 29 arrow down
+        .DW     @ALT         ; 30 arrow left
+        .DW     @ART         ; 31 arrow right
+
+@NONE:
+        JMP     TEXT_CURSOR_UPDATE
+@CR:
+        JSR     TEXT_UPDATE_CHARACTER_AT_CURSOR
         INC     TEXT_CURSORY.W
         LDX     #0
         STX     TEXT_CURSORX.W
         JMP     TEXT_CURSOR_UPDATE
-TEXT_WRITE_STRING_CHARACTER_TAB:
-        LDX     TEXT_CURSORX.W
-        LDY     TEXT_CURSORY.W
-        ACC16
-        JSR     TEXT_UPDATE_CHARACTER_RAW
+@TAB:
+        JSR     TEXT_UPDATE_CHARACTER_AT_CURSOR
         LDA     TEXT_CURSORX.W
         CLC
         ADC     #8
-        AND     #$F7
+        AND     #$F8
         STA     TEXT_CURSORX.W
         JMP     TEXT_CURSOR_UPDATE
-TEXT_WRITE_STRING_CHARACTER_NONE:
-        JMP     TEXT_CURSOR_UPDATE
-TEXT_WRITE_STRING_CHARACTER_BKSP:
-        LDX     TEXT_CURSORX.W
-        LDY     TEXT_CURSORY.W
-        ACC16
-        JSR     TEXT_UPDATE_CHARACTER_RAW
+@BKSP:
+        JSR     TEXT_UPDATE_CHARACTER_AT_CURSOR
         DEC     TEXT_CURSORX.W
         JSR     TEXT_CURSOR_UPDATE
         LDX     TEXT_CURSORX.W
@@ -388,6 +434,39 @@ TEXT_WRITE_STRING_CHARACTER_BKSP:
         STZ     TEXT_VRAM_CH.W,X
         ACC16
         JMP     TEXT_UPDATE_CHARACTER_KNOWN_OFFSET
+@AUP:
+        JSR     TEXT_UPDATE_CHARACTER_AT_CURSOR
+        LDY     TEXT_CURSORY.W
+        BEQ     +
+        DEC     TEXT_CURSORY.W
++       JMP     TEXT_CURSOR_UPDATE
+@ADN:
+        JSR     TEXT_UPDATE_CHARACTER_AT_CURSOR
+        LDY     TEXT_CURSORY.W
+        CPY     #47
+        BCS     +
+        INC     TEXT_CURSORY.W
++       JMP     TEXT_CURSOR_UPDATE
+@ALT:
+        JSR     TEXT_UPDATE_CHARACTER_AT_CURSOR
+        LDX     TEXT_CURSORX.W
+        BNE     +
+        LDY     TEXT_CURSORY.W
+        BNE     +
+        JMP     TEXT_CURSOR_UPDATE
++       DEC     TEXT_CURSORX.W
+        JMP     TEXT_CURSOR_UPDATE
+@ART:
+        JSR     TEXT_UPDATE_CHARACTER_AT_CURSOR
+        LDX     TEXT_CURSORX.W
+        CPX     #79
+        BCC     +
+        LDY     TEXT_CURSORY.W
+        CPY     #47
+        BCC     +
+        JMP     TEXT_CURSOR_UPDATE
++       INC     TEXT_CURSORX.W
+        JMP     TEXT_CURSOR_UPDATE
 
 ; A = character to write
 ; A, X, Y preserved
@@ -400,6 +479,22 @@ TEXT_WRITE_CHAR_AT_CURSOR:
         LDA     TEXT_TMP6.W
         JSR     TEXT_WRITE_STRING_CHARACTER@NOSTA
         EXITTEXTRAM
+        PLP
+        RTS
+
+TEXT_UPDATE_CHAR_AT_CURSOR:
+        PHP    
+        AXY16
+        PHA
+        PHX
+        PHY
+        ENTERTEXTRAM
+        JSR     TEXT_UPDATE_CHARACTER_AT_CURSOR
+        EXITTEXTRAM
+        AXY16
+        PLY
+        PLX
+        PLA
         PLP
         RTS
 
@@ -471,61 +566,59 @@ TEXT_FLASH_CURSOR:
         PHA
         ACC8
         ENTERTEXTRAM
-        LDA     KEYB_KEYDOWNL.L
+        LDA     TEXT_CURSORMOVED.W
+        BNE     @COULDREALLYFLASH
+        LDA     KEYB_KEYDOWN.W
         BEQ     @REALLYFLASH
         STZ     TEXT_CURSORTICKS.W
         STZ     TEXT_CURSORON.W
         BRA     @RET
+@COULDREALLYFLASH:
+        STZ     TEXT_CURSORMOVED.W
 @REALLYFLASH:
         LDA     TEXT_CURSORTICKS.W
         INC     A
         AND     #$3F
         STA     TEXT_CURSORTICKS.W
-        BEQ     @UPDCHAR
+        BEQ     @BLINKCHAR
         CMP     #$20
-        BEQ     @UPDCHARINV
+        BEQ     @BLINKCHAR
 @RET:   EXITTEXTRAM
         AXY16
         PLA
         PLP
         RTS
-@UPDCHAR:
-        AXY16
-        STZ     TEXT_CURSORON.W
-        PHX
-        PHY
-        LDX     TEXT_CURSORX
-        LDY     TEXT_CURSORY
-        JSR     TEXT_UPDATE_CHARACTER_RAW
-        PLY
-        PLX
-        BRA     @RET
-@UPDCHARINV:
+@BLINKCHAR:
+.ACCU 8
         LDA     $FFFF&TEXT_BGCOLOR.W
+        EOR     $FFFF&TEXT_FGCOLOR.W
         STA     TEXT_TMP5.W
-        LDA     $FFFF&TEXT_FGCOLOR.W
-        STA     $FFFF&TEXT_BGCOLOR.W
-        LDA     TEXT_TMP5.W
-        STA     $FFFF&TEXT_FGCOLOR.W
-        AXY16
-        LDA     #$FFFF
-        STA     TEXT_CURSORON.W
-        PHX
-        PHY
-        LDX     TEXT_CURSORX
-        LDY     TEXT_CURSORY
-        JSR     TEXT_UPDATE_CHARACTER_RAW
-        PLY
-        PLX
+        STA     TEXT_TMP5+1.W
+        ACC16
+        LDA     TEXT_CURSORX.W
+        LDY     TEXT_CURSORY.W
+        A_Y_TO_VIDEO_VRAM_OFFSET
         ACC8
-        LDA     $FFFF&TEXT_BGCOLOR.W
-        STA     TEXT_TMP5.W
-        LDA     $FFFF&TEXT_FGCOLOR.W
-        STA     $FFFF&TEXT_BGCOLOR.W
-        LDA     TEXT_TMP5.W
-        STA     $FFFF&TEXT_FGCOLOR.W
-        BRA     @RET
+        LDX     TEXT_TMP3.W
+        PHB
+        LDA     TEXT_TMP4.W
+        PHA
+        PLB
+        ACC16
+.REPEAT 8 INDEX OFFSETY
+.REPEAT 3 INDEX OFFSETX
+        LDA     $0000+OFFSETX*2+OFFSETY*512.W,X
+        EOR     $800000|TEXT_TMP5.L
+        STA     $0000+OFFSETX*2+OFFSETY*512.W,X
+.ENDR
+.ENDR
+        PLB
+        JMP     @RET
 
+.ORG $3FE0
+TEXT_UPDATE_CHAR_AT_CURSOR_TRAMPOLINE:
+        JSR     TEXT_UPDATE_CHAR_AT_CURSOR.W
+        RTL
 .ORG $3FE4
 TEXT_FLASH_CURSOR_TRAMPOLINE:
         JSR     TEXT_FLASH_CURSOR.W

@@ -2,10 +2,10 @@ CC=gcc
 FLAGS=-O2 -pedantic -std=c99
 CFLAGS=-L. -lSDL2
 ACOFLAGS=-O2
-DEPS = e1100.h emulator.h coro.h backend.h cpu.h alu.h io.h \
+DEPS = e1100.h emulator.h emuterm.h coro.h backend.h cpu.h alu.h io.h \
 		mem.h vpu.h
 OBJ = alu.o cpu_am.o cpu_in.o cpu.o dbg.o mem.o disasm.o \
-		floppy.o io.o vpu.o emulator.o e1100.o coro.o \
+		floppy.o io.o vpu.o emulator.o emuterm.o e1100.o coro.o \
 		backend/sdl2.o
 OUT = e1100em
 

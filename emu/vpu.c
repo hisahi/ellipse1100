@@ -77,10 +77,10 @@ void vpu_set_mode(VPUMode m)
 #if _DEBUG_MODE
     switch (pixf)
     {
-    case PF_RGBA8888: emu_puts("Preferred pixel format: RGBA8888"); break;
-    case PF_BGRA8888: emu_puts("Preferred pixel format: BGRA8888"); break;
-    case PF_ABGR8888: emu_puts("Preferred pixel format: ABGR8888"); break;
-    case PF_ARGB8888: emu_puts("Preferred pixel format: ARGB8888"); break;
+    case PF_RGBA8888: puts("Preferred pixel format: RGBA8888"); break;
+    case PF_BGRA8888: puts("Preferred pixel format: BGRA8888"); break;
+    case PF_ABGR8888: puts("Preferred pixel format: ABGR8888"); break;
+    case PF_ARGB8888: puts("Preferred pixel format: ARGB8888"); break;
     }
 #endif
 }

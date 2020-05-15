@@ -31,26 +31,31 @@
         SEI
         CLC                     ; \ enter native mode 
         XCE                     ; / starting with 8-bit A, X, Y
-        LDA.b   #$00
+        LDA     #$00.B
         PHA
         PLB                     ; B = 0
 
+        XY16
+        ACC8
+        LDA     #$02.B
+        STA     VPUCNTRL.W
+
         AXY16
-        LDA.w   #$0000
+        LDA     #$0000
         TCD                     ; D = 0
-        LDA.w   #$03FF
+        LDA     #$03FF
         TCS                     ; S to $03FF
 
 ; copy palette to VRAM using DMA0
-        LDA.w   #$0043          ; from bank $00 to $43
-        STA.w   DMA0BNKS
-        LDX.w   #DTA_PALETTE_START
-        STX.w   DMA0SRC
-        STZ.w   DMA0DST
-        LDA.w   #(DTA_PALETTE_END - DTA_PALETTE_START)
-        STA.w   DMA0CNT
-        LDA.w   #$0091          ; enable DMA & IRQ when over; we will WAI
-        STA.w   DMA0CTRL
+        LDA     #$0043          ; from bank $00 to $43
+        STA     DMA0BNKS.W
+        LDX     #DTA_PALETTE_START
+        STX     DMA0SRC.W
+        STZ     DMA0DST.W
+        LDA     #(DTA_PALETTE_END - DTA_PALETTE_START)
+        STA     DMA0CNT.W
+        LDA     #$0091          ; enable DMA & IRQ when over; we will WAI
+        STA     DMA0CTRL.W
         WAI                     ; wait until end of DMA
 
         ACC8
@@ -59,7 +64,7 @@
 
 ; set up interrupt trampolines
         PHB
-        LDA     #$80.b          ; RAM bank #$80
+        LDA     #$80.B          ; RAM bank #$80
         PHA
         PLB
         
@@ -67,7 +72,7 @@
         LDA     #BOOT_BACKGROUND_COLOR.b
         STA     $FFFF&TEXT_BGCOLOR.w
 
-        LDA     #$5C.b          ; JML $BBHHLL
+        LDA     #$5C.B          ; JML $BBHHLL
         STA     $FFFF&(SWRAMCOP-1).w
         STA     $FFFF&(SWRAMBRK-1).w
         STA     $FFFF&(SWRAMNMI-1).w
@@ -99,16 +104,16 @@
 ; copy ELLIPSE logo to screen
         LDX     #42
         LDA     #PIC_LOGO_START
-        STA.w   DMA0SRC         ; copy from logo image in ROM
-        LDY.w   #$0080          ; ...    to $41:0080
-        STY.w   DMA0DST
+        STA     DMA0SRC.W       ; copy from logo image in ROM
+        LDY     #$0080          ; ...    to $41:0080
+        STY     DMA0DST.W
         LDA     #$0041          ; bank setup
-        STA.w   DMA0BNKS
+        STA     DMA0BNKS.W
 @LOGOLOOP:
-        LDA.w   #$0100
-        STA.w   DMA0CNT         ; copy total of 256 bytes
-        LDA.w   #$0091          ; enable DMA & IRQ when over; we will WAI
-        STA.w   DMA0CTRL
+        LDA     #$0100
+        STA     DMA0CNT.W       ; copy total of 256 bytes
+        LDA     #$0091          ; enable DMA & IRQ when over; we will WAI
+        STA     DMA0CTRL.W
         WAI                     ; wait until end of DMA
         TYA
         CLC     
@@ -138,16 +143,16 @@ FIRSTFLOPPYCHECK:
 
         LDX     #96
         LDA     #PIC_FLOPPY_START
-        STA.w   DMA0SRC         ; copy from floppy image in ROM
-        LDY.w   #$04D0          ; ...    to $42:20C0
-        STY.w   DMA0DST
+        STA     DMA0SRC.W       ; copy from floppy image in ROM
+        LDY     #$04D0          ; ...    to $42:20C0
+        STY     DMA0DST.W
         LDA     #$0042          ; bank setup
-        STA.w   DMA0BNKS
+        STA     DMA0BNKS.W
 @FLOPPYLOOP:
-        LDA.w   #96
-        STA.w   DMA0CNT         ; copy total of 64 bytes
-        LDA.w   #$0091          ; enable DMA & IRQ when over; we will WAI
-        STA.w   DMA0CTRL
+        LDA     #96
+        STA     DMA0CNT.W       ; copy total of 64 bytes
+        LDA     #$0091          ; enable DMA & IRQ when over; we will WAI
+        STA     DMA0CTRL.W
         WAI                     ; wait until end of DMA
         TYA
         CLC     
@@ -288,15 +293,15 @@ FAST_SCREEN_FILL:               ; assumes 8-bit A, 16-bit X, Y
         SEI                     ; disable interrupts
         AXY16
         LDX     #$0003
-        STZ.w   DMA0SRC         ; copy from $80:0000
-        STZ.w   DMA0DST         ;        to $40:0000
+        STZ     DMA0SRC.W       ; copy from $80:0000
+        STZ     DMA0DST.W       ;        to $40:0000
         LDY     #$8040          ; bank setup
 @FSLOOP:
-        STY.w   DMA0BNKS
-        STZ.w   DMA0CNT         ; copy total of 64K bytes
-        LDA.w   #$0094          ; enable DMA
-        STA.w   DMA0CTRL        ; fixed SRC address, changing DST address
--       BIT     DMA0CTRL        ; wait until end of DMA
+        STY     DMA0BNKS.W
+        STZ     DMA0CNT.W       ; copy total of 64K bytes
+        LDA     #$0094          ; enable DMA
+        STA     DMA0CTRL.W      ; fixed SRC address, changing DST address
+-       BIT     DMA0CTRL.W      ; wait until end of DMA
         BMI     -
         INY                     ; increase target bank
         DEX

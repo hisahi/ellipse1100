@@ -42,7 +42,6 @@ static unsigned long lastcounter = 0;
 static SDL_Window* window = NULL;
 static SDL_Surface* surface = NULL;
 static SDL_Renderer* renderer = NULL;
-static SDL_Rect rect;
 static SDL_Texture* texbuffer = NULL;
 static SDL_Thread* termthread = NULL;
 static SDL_mutex* termmutex = NULL;
@@ -74,8 +73,6 @@ void emu_init(const char* title)
     if (!(termmutex = SDL_CreateMutex()))
         emu_fail("Cannot create terminal mutex");
         
-    rect.x = 0;
-    rect.y = 0;
     emu_settitle(title);
 }
 
@@ -418,9 +415,7 @@ int emu_scr_lock(uint32_t** buf, int* pitch)
 void emu_scr_unlock_blit(void)
 {
     SDL_UnlockTexture(texbuffer);
-    rect.w = surface->w;
-    rect.h = surface->h;
-    SDL_RenderCopy(renderer, texbuffer, NULL, &rect);
+    SDL_RenderCopy(renderer, texbuffer, NULL, NULL);
     SDL_RenderPresent(renderer);
 }
 
