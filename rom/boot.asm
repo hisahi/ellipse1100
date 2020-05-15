@@ -37,6 +37,7 @@
         AXY16
         JSR     CHECKSUM
 
+ALMOSTRESET:
         LDA     #$00.B
         PHA
         PLB                     ; B = 0
@@ -198,7 +199,7 @@
         ORA     #$04
         STA     VPUCNTRL.W
         ACC16
-        LDX     #60
+        LDX     #80
 -       WAI
         DEX
         BNE     -
@@ -257,17 +258,19 @@ FIRSTFLOPPYCHECK:
         PLP
         
         JSL     KEYB_RESETBUF
-        JSL     KEYB_UPDKEYS
-
+        ACC8
 WAIT_FLOPPY_LOOP:
+        JSL     KEYB_UPDKEYS
+        JSL     KEYB_GETMODS
+        AND     #$10
+        BNE     BIOS_MENU
+
         JSR     CHECK_FLOPPY_DISK
         BNE     GOT_FLOPPY
 @IRQWAI:
         WAI
-        JSL     KEYB_UPDKEYS
-        JSL     KEYB_GETMODS
-        AND     #$10
-        BEQ     WAIT_FLOPPY_LOOP
+        BRA     WAIT_FLOPPY_LOOP
+
 BIOS_MENU:
         ACC8
         LDA     #0              ; disable floppy IRQ
@@ -392,6 +395,7 @@ GOT_FLOPPY_CHECK_BOOT:
         LDA     #$03FF.w
         TCS                     ; S to $03FF
         JML     $800008
+        STP
 
 BIOS_MENU_LOOP:
         ACC8
@@ -406,18 +410,16 @@ BIOS_MENU_LOOP:
 
 BIOS_MENU_REBOOT:
         ACC8
-        LDA     #$FF
-        STA     ESYSSTAT.W      ; system will reset here!
-        STP
+        JMP     ALMOSTRESET
 
 CHECK_FLOPPY_DISK:
-        LDA     FLP1STAT
-        AND     #%00011100.b
+        LDA     FLP1STAT.W
+        AND     #%00011100.B
         RTS
 
 FAST_SCREEN_FILL:               ; assumes 8-bit A, 16-bit X, Y
         ACC8
-        STA     $800000.l
+        STA     $800000.L
         PHP
         CLD
         SEI                     ; disable interrupts
