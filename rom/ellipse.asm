@@ -51,6 +51,7 @@ BANKS 8
 .ORGA $000000           ; DATA
 NOTICE_START:
         .DB     "(C) ELLIPSE DATA ELECTRONICS.   1984/1985 v1.0.0"
+        .DB     0
 ROM_VERSION:
         .DW     $0100
 NOTICE_END:
@@ -59,8 +60,11 @@ DTA_PALETTE_START:
         .INCBIN "palette.bin"   ; DEFAULT PALETTE
 DTA_PALETTE_END:
 PIC_LOGO_START:
-        .INCBIN "logo.bin"      ; BOOT LOGO
+        .INCBIN "logo.bin"      ; BOOT LOGO "ELLIPSE" TEXT
 PIC_LOGO_END:
+PIC_LOGOI_START:
+        .INCBIN "logoi.bin"     ; BOOT LOGO "ELLIPSE LOGO"
+PIC_LOGOI_END:
 PIC_FLOPPY_START:
         .INCBIN "floppy.bin"    ; "INSERT FLOPPY" LOGO
 PIC_FLOPPY_END:

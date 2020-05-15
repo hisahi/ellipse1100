@@ -1,5 +1,5 @@
 CC=gcc
-FLAGS=-O2 -pedantic -std=c99
+FLAGS=-O2 -pedantic -std=c99 -g
 CFLAGS=-L. -lSDL2
 ACOFLAGS=-O2
 DEPS = e1100.h emulator.h emuterm.h coro.h backend.h cpu.h alu.h io.h \

@@ -48,6 +48,11 @@ void io_raise_nmi(BYTE s)
 
 #define IO_KEYB_IRQ_ENABLED() (1 & genericint)
 
+inline void io_keyb_update_caps(BYTE c)
+{
+    keymatrix[0] = c ? (keymatrix[0] | 0x20) : (keymatrix[0] & ~0x20);
+}
+
 inline void io_keyb_keydown(BYTE k)
 {
     keymatrix[EXTRACT_KEY_CODE_COL(k)] |= (1U << EXTRACT_KEY_CODE_ROW(k));

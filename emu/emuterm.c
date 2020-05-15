@@ -99,6 +99,7 @@ size_t strncpy_sp(char* dst, const char* src, size_t size)
     return i;
 }
 
+static unsigned long long last_total_cycles = 0;
 static int last_cmd_i = 0;
 static char tok0[64];
 void emu_term_do_line(const char* buf, size_t buflen)
@@ -212,6 +213,29 @@ void emu_term_do_line(const char* buf, size_t buflen)
             printf("Break disabled\n");
         }
     }
+    else if (!strcmp(tok0, "x1")) // screen size x1
+    {
+        int w, h;
+        vpu_get_resolution(&w, &h);
+        emu_set_window_size(w, h);
+    }
+    else if (!strcmp(tok0, "x2")) // screen size x2
+    {
+        int w, h;
+        vpu_get_resolution(&w, &h);
+        emu_set_window_size(w * 2, h * 2);
+    }
+    else if (!strcmp(tok0, "cc")) // cycle counter
+    {
+        printf("        Cycles: %40llu\n"
+               " since last cc: %40llu\n"
+               "avg per second: %40llu\n"
+               " total runtime: %40llu ms\n",
+               total_cycles, total_cycles - last_total_cycles,
+               (total_cycles * 1000) / total_ms, total_ms);
+        
+        last_total_cycles = total_cycles;
+    }
     else if (!strcmp(tok0, "z")) // reset
     {
         e1100_reset();
@@ -252,6 +276,9 @@ void emu_term_do_line(const char* buf, size_t buflen)
         printf("f       mount floppy I or unmount\n");
         printf("f1      mount floppy I or unmount\n");
         printf("f2      mount floppy II or unmount\n");
+        printf("x1      set window size to x1 resolution\n");
+        printf("x2      set window size to x2 resolution\n");
+        printf("cc      cycle counter\n");
     }
     else
         printf("Unknown command - type ? for help\n");

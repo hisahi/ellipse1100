@@ -87,6 +87,7 @@ KEYB_APPLY_CAPS_TO_KEY:
         .DB     0,0,0,0,0,0,0,0
         .DB     0,0,0,0,0,0,0,0
 
+.DEFINE KEYB_NMI_TIMER $0EEC
 .DEFINE KEYB_TMP3 $0EEE
 .DEFINE KEYB_TMP2 $0EF0
 .DEFINE KEYB_KEYDOWNX $0EF2
@@ -152,12 +153,28 @@ KEYB_RESET_BUFFER:
         PLP
         RTS
 
-; updates key buffers
-; X, Y preserved, A clobbered
+KEYB_NMI_TIMER:
+        PHP
+        ACC8
+        LDA     KEYB_NMI_TIMER.L
+        INC     A
+        STA     KEYB_NMI_TIMER.L
+        PLP
+        RTS
+
 KEYB_UPDATE_KEYS:
         PHP
         AXY16
         ENTERKEYBRAM
+        DEC     KEYB_NMI_TIMER.W
+        BRA     KEYB_UPDATE_KEYS_IMMEDIATE@INNER
+; updates key buffers
+; X, Y preserved, A clobbered
+KEYB_UPDATE_KEYS_IMMEDIATE:
+        PHP
+        AXY16
+        ENTERKEYBRAM
+@INNER:
         PHX
         PHY
         STZ     KEYB_NEWKEYPRESSED.W            ; set "new key pressed" to 0
@@ -264,8 +281,10 @@ KEYB_UPDATE_KEYS:
         LDA     #$FF                            ; load #$FF again to store to
         STA     KEYB_NEWKEYPRESSED.W            ; "new key pressed"
         BRA     ++++                            ; skip some redundant insrts
-++      INC     KEYB_KEYDOWNTICKS.W         ; increase key down ticks
-        LDA     #$FF                            ; load #$FF again to store to
+++      LDA     KEYB_NMI_TIMER.W            ; check NMI timer
+        BEQ     +                               ; increase key down ticks
+        INC     KEYB_KEYDOWNTICKS.W             ; only if NMI timer <>0
++       LDA     #$FF                            ; load #$FF again to store to
         BRA     ++++                            ; cache, and go to ++++
 +++     CPX     KEYB_KEYDOWNX.W             ; key up is "current code"?
         BNE     ++++                            ; if not, skip
@@ -284,11 +303,20 @@ KEYB_UPDATE_KEYS:
 @KEYLOOPEND:
         PLY
         PLX
+        STZ     KEYB_NMI_TIMER.W
         EXITKEYBRAM
         PLP
         LDA     KEYB_KEYDOWNL.L
         RTS
 
+.ORG $7FEC
+KEYB_NMI_TIMER_TRAMPOLINE:
+        JSR     KEYB_NMI_TIMER.W
+        RTL
+.ORG $7FF0
+KEYB_UPDATE_KEYS_IMMEDIATE_TRAMPOLINE:
+        JSR     KEYB_UPDATE_KEYS_IMMEDIATE.W
+        RTL
 .ORG $7FF4
 KEYB_GET_PRESSED_KEY_TRAMPOLINE:
         JSR     KEYB_GET_PRESSED_KEY.W

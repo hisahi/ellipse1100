@@ -26,6 +26,7 @@ SOFTWARE.
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "e1100.h"
 #include "mem.h"
@@ -83,6 +84,12 @@ void vpu_set_mode(VPUMode m)
     case PF_ARGB8888: puts("Preferred pixel format: ARGB8888"); break;
     }
 #endif
+}
+
+void vpu_get_resolution(int* w, int* h)
+{
+    *w = screen_w;
+    *h = screen_h;
 }
 
 void vpu_lock(void)

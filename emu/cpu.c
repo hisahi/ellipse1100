@@ -29,6 +29,8 @@ SOFTWARE.
 #include "coro.h"
 #include "cpu.h"
 #include "mem.h"
+#include "emulator.h"
+#include "e1100.h"
 
 CPURegs regs;
 static char reset;
@@ -41,14 +43,34 @@ static coroutine cpu_coro;
 REG_16 oldS;
 ADDR lastAddrPC;
 BYTE lastOpcode = 0;
+static long long runcyc = 0;
 int cpu_debug = _CPU_ALWAYS_DEBUG;
 int cpu_debug_instr = 0;
+
+CPURegs regs_abort;
 
 #define I_ABORT 4
 #define I_NMI 2
 #define I_IRQ 1
 
 void cpu_instruction_loop(void);
+
+inline void cpu_end_cycle(void)
+{
+    e1100_post_cpu_cycle();
+    if (paused || --runcyc <= 0)
+    {
+        coro_yield();
+        if (runcyc <= 0)
+            runcyc = 1;
+    }
+}
+
+inline void cpu_run_cycles(unsigned long cycles)
+{
+    runcyc = cycles;
+    coro_resume(&cpu_coro);
+}
 
 void cpu_init(void)
 {
@@ -58,11 +80,6 @@ void cpu_init(void)
     irqDisable = 1;
     coro_create(&cpu_coro, &cpu_instruction_loop);
     cpu_reset();
-}
-
-inline void cpu_cycle(void)
-{
-    coro_resume(&cpu_coro);
 }
 
 void cpu_free(void)
@@ -84,6 +101,13 @@ void cpu_irq(void)
 void cpu_nmi(void)
 {
     interrupt |= I_NMI;
+}
+
+void cpu_abort(void)
+{
+    interrupt |= I_ABORT;
+    if (!(interrupt & I_ABORT))
+        regs_abort = regs;
 }
 
 inline int cpu_halted(void)
@@ -223,6 +247,7 @@ void cpu_do_reset(void)
     regs.S = 0x0100 | (regs.S & 0xFF);
     regs.X &= 0xFF;
     regs.Y &= 0xFF;
+    regs.a_8b = regs.xy_8b = 1;
     cpuStp = cpuWai = 0;
     interrupt = 0;
 
@@ -264,6 +289,7 @@ void cpu_do_abort(void)
 
     interrupt &= ~I_ABORT;
     cpuWai = 0;
+    regs = regs_abort;
     regs.PC = lastAddrPC;
     regs.S = oldS;
 
@@ -309,6 +335,7 @@ void cpu_instruction_loop(void)
 {
     REG_8 ib;
     AddrMode am;
+    ++runcyc;
 
     for (;;)
     {
@@ -349,9 +376,7 @@ void cpu_instruction_loop(void)
         (*cpu_instr_table[ib])(am = *cpu_addr_table[ib]);
 
         if (cpu_debug)
-        {
             CPU_DEBUG_ENDINSTR();
-        }
     }
     
     emu_fail("Infinite loop exited");

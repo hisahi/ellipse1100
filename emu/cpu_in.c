@@ -192,6 +192,7 @@ void cpu_instruction_XCE(AddrMode am)
         regs.Y &= 0xFF;
         regs.S = 0x0100 | (regs.S & 0xFF);
         regs.P |= P_M | P_X;
+        regs.a_8b = regs.xy_8b = 1;
     }
 }
 

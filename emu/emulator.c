@@ -44,6 +44,8 @@ int f1wp = 0, f2wp = 0;
 int f1mount = 0, f2mount = 0;
 char drive0fn[MAX_PATH_NAME + 1];
 char drive1fn[MAX_PATH_NAME + 1];
+unsigned long long total_cycles = 0;
+unsigned long long total_ms = 0;
 
 void emu_pause(void)
 {
@@ -185,35 +187,34 @@ int emulator_main()
             emu_term_do_line(cmdline, cmdlinelen);
 
         tick = emu_get_tick_ns();
-        acc += tick;
+        acc = (acc + tick) % (100 * NS_PER_MS);
         cyc_tot = 0;
 
         acc_ms = acc / NS_PER_MS;
         acc %= NS_PER_MS;
-
-        for (i = 0; i < acc_ms; ++i)
-        {
-            cyc_tot += CYC_PER_MS;
-            cyc_part += CYC_PART_PER_MS;
-            cyc_tot += cyc_part / 1000;
-            cyc_part %= 1000;
-        }
+        total_ms += acc_ms;
 
         if (!paused)
         {
-            floppy_tick(acc_ms);
-
-            for (i = cyc_tot; !paused && i > 8; i -= 8)
+            for (i = 0; i < acc_ms; ++i)
             {
-                e1100_tick(); e1100_tick(); e1100_tick(); e1100_tick();
-                e1100_tick(); e1100_tick(); e1100_tick(); e1100_tick();
+                cyc_tot += CYC_PER_MS;
+                cyc_part += CYC_PART_PER_MS;
+                cyc_tot += cyc_part / 1000;
+                cyc_part %= 1000;
             }
 
-            for (; !paused && i; --i)
-                e1100_tick();
+            floppy_tick(acc_ms);
+
+            e1100_run(cyc_tot
+#ifdef SLOWDOWN
+                        / SLOWDOWN
+#endif
+                        );
+            total_cycles += cyc_tot;
         }
 
-        emu_delay_ms(5);
+        emu_delay_ms(3);
     }
 
     if (floppy_has_media(0) && !f1wp) save_floppy_media(0);

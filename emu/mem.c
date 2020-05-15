@@ -77,7 +77,12 @@ BYTE mem_read(ADDR a)
     if (bank == 0)
     {
         if (a < 0x0400)
-            return ram[(stack_bank << 16) | a];
+        {
+            if (stack_bank)
+                return mem_read(BANK_ADDR(stack_bank, a));
+            else
+                return ram[BANK_ADDR(stack_bank, a)];
+        }
         else if (a < 0x7000)
             return ram[a];
         else if (a < 0x8000)
@@ -95,8 +100,13 @@ void mem_write(ADDR a, BYTE v)
     a &= 0x3FFFFFU;
     if (bank == 0)
     {
-        if (a < 0x0800)
-            ram[(stack_bank << 16) | a] = v;
+        if (a < 0x0400)
+        {
+            if (stack_bank)
+                mem_write(BANK_ADDR(stack_bank, a), v);
+            else
+                ram[BANK_ADDR(stack_bank, a)] = v;
+        }
         else if (a < 0x7000)
             ram[a] = v;
         else if (a < 0x8000)

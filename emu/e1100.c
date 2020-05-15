@@ -60,15 +60,23 @@ void e1100_free(void)
     vpu_free();
 }
 
-inline void e1100_tick(void)
+inline void e1100_run(unsigned long c)
 {
-#ifdef SLOWDOWN
-    if (++cycles % SLOWDOWN == 0)
-#endif
-    cpu_cycle();
+    cycles += c;
+    cpu_run_cycles(c);
+}
+
+void e1100_post_cpu_cycle(void)
+{
     dma_cycle();
-    vpu_cycle();
-    vpu_cycle();
+#ifdef SLOWDOWN
+    for (int i = 0; i < SLOWDOWN; ++i)
+#else
+#endif
+    {
+        vpu_cycle();
+        vpu_cycle();
+    }
 }
 
 void e1100_step_instruction(void)
@@ -76,7 +84,7 @@ void e1100_step_instruction(void)
     cpu_debug = 1;
     cpu_debug_instr = 1;
     while (cpu_debug_instr && !cpu_halted())
-        e1100_tick();
+        e1100_run(1);
     cpu_debug = _CPU_ALWAYS_DEBUG;
 }
 

@@ -79,31 +79,31 @@
 
 .MACRO X_Y_TO_TEXT_VRAM_OFFSET
         ;       A = X * Y + 80
-        STX     TEXT_TMP2.W
+        STX     $FF&TEXT_TMP2.B
         TYA
         ASL     A
         ASL     A
         ASL     A
         ASL     A
-        STA     TEXT_TMP1.W
+        STA     $FF&TEXT_TMP1.B
         ASL     A
         ASL     A
         CLC
-        ADC     TEXT_TMP1.W
+        ADC     $FF&TEXT_TMP1.B
         CLC
-        ADC     TEXT_TMP2.W
+        ADC     $FF&TEXT_TMP2.B
         TAX
 .ENDM
 
 .MACRO A_Y_TO_VIDEO_VRAM_OFFSET
         ASL     A                       ; A = A * 6
-        STA     TEXT_TMP4.W
+        STA     $FF&TEXT_TMP4.B
         ASL     A
         CLC
-        ADC     TEXT_TMP4.W
+        ADC     $FF&TEXT_TMP4.B
         CLC
         ADC     #16
-        STA     TEXT_TMP3.W
+        STA     $FF&TEXT_TMP3.B
         TYA                             ; Y coordinate
         LSR     A                       ; A = (A >> 4) & 3
         LSR     A
@@ -111,7 +111,7 @@
         LSR     A
         AND     #3
         ORA     #$40
-        STA     TEXT_TMP4.W
+        STA     $FF&TEXT_TMP4.B
         TYA                             ; Y coordinate
         AND     #$0F                    ; A = (A & 0x0F) << 12
         ASL     A
@@ -120,14 +120,14 @@
         ASL     A
         XBA    
         CLC
-        ADC     TEXT_TMP3.W             ; A += (X << 3 + 16)
-        STA     TEXT_TMP3.W
+        ADC     $FF&TEXT_TMP3.B         ; A += (X << 3 + 16)
+        STA     $FF&TEXT_TMP3.B
 .ENDM
 
 .ACCU 16
 TEXT_UPDATE_CHARACTER_AT_CURSOR:
-        LDX     TEXT_CURSORX.W
-        LDY     TEXT_CURSORY.W
+        LDX     $FF&TEXT_CURSORX.B
+        LDY     $FF&TEXT_CURSORY.B
 TEXT_UPDATE_CHARACTER_RAW:
         ; A = X + Y * 80
         X_Y_TO_TEXT_VRAM_OFFSET
@@ -139,17 +139,17 @@ TEXT_UPDATE_CHARACTER_KNOWN_OFFSET:
         ASL     A
         ASL     A
         ASL     A
-        STA     TEXT_TMP7.W
+        STA     $FF&TEXT_TMP7.B
         LDA     TEXT_VRAM_CL,X
-        STA     TEXT_TMP1.W
+        STA     $FF&TEXT_TMP1.B
 
 ; now use x,y values to compute target screen address and store it to
 ;     TEXT_TMP3 (address), TEXT_TMP4 (bank)
-        LDA     TEXT_TMP2.W             ; X coordinate
+        LDA     $FF&TEXT_TMP2.B          ; X coordinate
         A_Y_TO_VIDEO_VRAM_OFFSET
 
         TAY
-        LDX     TEXT_TMP7.W
+        LDX     $FF&TEXT_TMP7.B
 ; X contains address to character bitmap (low byte)
 ; Y is target location in graphics VRAM
 ; A is clobbered
@@ -161,14 +161,14 @@ TEXT_DRAW_CHARACTER:
         PHA
 ; switch data bank to destination VRAM bank
         PHB
-        LDA     TEXT_TMP4.W
+        LDA     $FF&TEXT_TMP4.B
         PHA
         PLB
-.REPEAT 8
+.REPEAT 8 INDEX YOFF
         ACC8
         LDA     ($010000|FIXFONT_START).L,X
         XBA
-.REPEAT 6
+.REPEAT 6 INDEX XOFF
         LDA     3,S
         XBA
         ASL     A
@@ -180,18 +180,20 @@ TEXT_DRAW_CHARACTER:
         STA     $0000.W,Y
         INY
 .ENDR
-        INX
         ACC16
+.IFLE YOFF 7
+        INX
         TYA
         CLC
         ADC     #$0200-6
         TAY
+.ENDIF
 .ENDR
 @ENDCHAR:
         PLB
         PLA
         RTS
-        
+
 ; X, Y are coordinates
 ; clobbers A, X, Y
 TEXT_UPDATE_CHARACTER:

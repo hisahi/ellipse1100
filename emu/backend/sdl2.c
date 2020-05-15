@@ -104,6 +104,11 @@ void emu_settitle(const char* title)
     SDL_SetWindowTitle(window, title);
 }
 
+void emu_set_window_size(int w, int h)
+{
+    SDL_SetWindowSize(window, w, h);
+}
+
 BYTE emu_convert_key_code(SDL_Keycode key)
 {
     switch (key)
@@ -218,6 +223,8 @@ BYTE emu_convert_key_code(SDL_Keycode key)
 
 int emu_running(void)
 {
+    if (quit) return 0;
+
     SDL_Event e;
     BYTE tmp;
     while (SDL_PollEvent(&e))
@@ -229,10 +236,7 @@ int emu_running(void)
             break;
         case SDL_KEYDOWN:
             // handle caps
-            if ((e.key.keysym.mod & KMOD_CAPS) == KMOD_CAPS)
-                io_keyb_keydown(MAKE_KEY_CODE(0, 5));
-            else
-                io_keyb_keyup(MAKE_KEY_CODE(0, 5));
+            io_keyb_update_caps((e.key.keysym.mod & KMOD_CAPS) == KMOD_CAPS);
             if (e.key.keysym.sym == SDLK_F11)
                 emu_grab_input(0);
             else if (e.key.keysym.sym == SDLK_F12
@@ -250,10 +254,7 @@ int emu_running(void)
             break;
         case SDL_KEYUP:
             // handle caps
-            if ((e.key.keysym.mod & KMOD_CAPS) == KMOD_CAPS)
-                io_keyb_keydown(MAKE_KEY_CODE(0, 5));
-            else
-                io_keyb_keyup(MAKE_KEY_CODE(0, 5));
+            io_keyb_update_caps((e.key.keysym.mod & KMOD_CAPS) == KMOD_CAPS);
             tmp = emu_convert_key_code(e.key.keysym.sym);
             if (tmp != INVALID_KEY)
                 io_keyb_keyup(tmp);

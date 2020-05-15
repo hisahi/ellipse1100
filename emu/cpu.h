@@ -56,8 +56,8 @@ typedef void Write16(REG_16 val);
 #define P_Z 0x02U /* ALU zero flag */
 #define P_C 0x01U /* ALU carry flag */
 
-#define A_8b() (regs.E | (regs.P & P_M))
-#define XY_8b() (regs.E | (regs.P & P_X))
+#define A_8b() (regs.a_8b)
+#define XY_8b() (regs.xy_8b)
 
 /* registers */
 
@@ -72,6 +72,8 @@ typedef struct CPURegs {
     REG_8 K;
     REG_8 B;
     char E;
+    int a_8b;
+    int xy_8b;
 } CPURegs;
 
 extern CPURegs regs;
@@ -88,16 +90,16 @@ extern BYTE lastOpcode;
 
 #define CANCEL cpu_should_cancel_instruction
 
-#define SET_A(v) ( regs.A = CANCEL() ? regs.A \
-                    : A_8b() ? ((regs.A & 0xFF00) | ((v) & 0xFF)) : (v) )
-#define SET_X(v) ( regs.X = CANCEL() ? regs.X \
-                    : XY_8b() ? ((regs.X & 0xFF00) | (v) & 0xFF) : (v) )
-#define SET_Y(v) ( regs.Y = CANCEL() ? regs.Y \
-                    : XY_8b() ? ((regs.Y & 0xFF00) | (v) & 0xFF) : (v) )
-#define SET_P(v) ( regs.P = CANCEL() ? regs.P : (v) )
-#define SET_D(v) ( regs.D = CANCEL() ? regs.D : (v) )
-#define SET_B(v) ( regs.B = CANCEL() ? regs.B : (v) )
-#define SET_K(v) ( regs.K = CANCEL() ? regs.K : (v) )
+#define SET_A(v) ( regs.A = A_8b() ? ((regs.A & 0xFF00) | ((v) & 0xFF)) : (v) )
+#define SET_X(v) ( regs.X = XY_8b() ? ((regs.X & 0xFF00) | ((v) & 0xFF)) : (v) )
+#define SET_Y(v) ( regs.Y = XY_8b() ? ((regs.Y & 0xFF00) | ((v) & 0xFF)) : (v) )
+#define SET_P(v) ( regs.P = v, \
+                   regs.a_8b = regs.E || (regs.P & P_M), \
+                   regs.xy_8b = regs.E || (regs.P & P_X), \
+                   regs.P )
+#define SET_D(v) ( regs.D = v )
+#define SET_B(v) ( regs.B = v )
+#define SET_K(v) ( regs.K = v )
 
 #define UPDATE_Z_8(v) SET_P((regs.P & ~P_Z) | ((v) ? 0 : P_Z))
 #define UPDATE_Z_16(v) SET_P((regs.P & ~P_Z) | ((v) ? 0 : P_Z))
@@ -149,7 +151,6 @@ typedef struct AddrMode {
 typedef void (*cpu_instr)(AddrMode am);
 
 void cpu_init(void);
-void cpu_cycle(void);
 ADDR cpu_inc_pc(void);
 void cpu_free(void);
 int cpu_should_cancel_instruction();
@@ -160,6 +161,8 @@ void cpu_irq(void);
 void cpu_nmi(void);
 void cpu_cop(void);
 void cpu_abort(void);
+void cpu_run_cycles(unsigned long cycles);
+void cpu_end_cycle(void);
 int cpu_halted(void);
 
 void cpu_push8(REG_8 v);
@@ -169,14 +172,14 @@ REG_8 cpu_pull8(void);
 REG_16 cpu_pull16(void);
 ADDR cpu_pull24(void);
 
-#define END_CYCLE_NOABORT() coro_yield()
+#define END_CYCLE_NOABORT() cpu_end_cycle()
 #define END_CYCLE() { \
         if (cpu_should_abort_instruction()) return; \
-        coro_yield(); \
+        END_CYCLE_NOABORT(); \
         irqDisable = regs.P & P_I; \
     }
 #define cpu_mem_write(a, v) \
-        if(!cpu_should_cancel_instruction()) mem_write(a, v)
+        if(!CANCEL()) mem_write(a, v)
 
 /* debug stuff */
 

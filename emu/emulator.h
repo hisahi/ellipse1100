@@ -35,7 +35,7 @@ SOFTWARE.
 #define _INTERRUPT_DEBUG 0
 #define _DMA_DEBUG 0
 #define _FLOPPY_DEBUG 0
-#define SLOWDOWN 4
+// #define SLOWDOWN 4
 
 #define MS_PER_S 1000ULL
 #define NS_PER_MS 1000000ULL
@@ -46,6 +46,8 @@ SOFTWARE.
 extern int paused;
 extern int breakpoint_enabled;
 extern unsigned int breakpoint_addr;
+extern unsigned long long total_cycles;
+extern unsigned long long total_ms;
 
 typedef uint8_t BYTE;
 

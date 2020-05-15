@@ -38,6 +38,7 @@ BYTE io_read(ADDR p);
 void io_write(ADDR p, BYTE v);
 void dma_cycle(void);
 void io_reset(void);
+void io_keyb_update_caps(BYTE c);
 void io_keyb_keydown(BYTE k);
 void io_keyb_keyup(BYTE k);
 void io_raise_irq(BYTE s);

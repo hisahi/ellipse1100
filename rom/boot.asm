@@ -24,9 +24,11 @@
 ; Written for the WLA-DX assembler
 ;
 
+.DEFINE BOOT_BACKGROUND_COLOR $55
 .DEFINE BOOT_DISK_MSG_X 30
 .DEFINE BOOT_DISK_MSG_Y 28
-.DEFINE BOOT_BACKGROUND_COLOR $55
+.DEFINE COPYRIGHT_MSG_X 16
+.DEFINE COPYRIGHT_MSG_Y 46
 
         SEI
         CLC                     ; \ enter native mode 
@@ -101,11 +103,11 @@
 
         PLB                     ; restore ROM bank
 
-; copy ELLIPSE logo to screen
+; copy ELLIPSE text logo to screen
         LDX     #42
         LDA     #PIC_LOGO_START
         STA     DMA0SRC.W       ; copy from logo image in ROM
-        LDY     #$0080          ; ...    to $41:0080
+        LDY     #$3080          ; ...    to $41:3080
         STY     DMA0DST.W
         LDA     #$0041          ; bank setup
         STA     DMA0BNKS.W
@@ -122,6 +124,52 @@
         TAY
         DEX
         BNE     @LOGOLOOP
+
+; copy ELLIPSE image logo to screen
+        LDX     #96
+        LDA     #PIC_LOGOI_START
+        STA     DMA0SRC.W       ; copy from logo image in ROM
+        LDY     #$40D0          ; ...    to $40:40D0
+        STY     DMA0DST.W
+        LDA     #$0040          ; bank setup
+        STA     DMA0BNKS.W
+@LOGOILOOP:
+        LDA     #$0060
+        STA     DMA0CNT.W       ; copy total of 96 bytes
+        LDA     #$0091          ; enable DMA & IRQ when over; we will WAI
+        STA     DMA0CTRL.W
+        WAI                     ; wait until end of DMA
+        TYA
+        CLC     
+        ADC     #$0200          ; make sure we start on the same X coordinate
+        STA     DMA0DST
+        TAY
+        DEX
+        BNE     @LOGOILOOP
+
+; copy copyright message to RAM
+        STZ     DMA0SRC.W       ; copy from logo image in ROM
+        STZ     DMA0DST.W
+        LDA     #$0080          ; bank setup
+        STA     DMA0BNKS.W
+        LDA     #$0031
+        STA     DMA0CNT.W       ; copy total of 49 bytes
+        LDA     #$0091          ; enable DMA & IRQ when over; we will WAI
+        STA     DMA0CTRL.W
+        WAI                     ; wait until end of DMA
+
+; write copyright message to screen
+        ACC8
+        PHB
+        LDA     #$80
+        PHA
+        PLB
+        ACC16
+        LDX     #COPYRIGHT_MSG_X
+        LDY     #COPYRIGHT_MSG_Y
+        LDA     #$0000
+        JSL     TEXT_WRSTRAT
+        PLB
 
 ; set up floppy drive I to do IRQs
         STZ     FLP1SECT        ; sector, track, side all to 0
@@ -144,7 +192,7 @@ FIRSTFLOPPYCHECK:
         LDX     #96
         LDA     #PIC_FLOPPY_START
         STA     DMA0SRC.W       ; copy from floppy image in ROM
-        LDY     #$04D0          ; ...    to $42:20C0
+        LDY     #$04DE          ; ...    to $42:04DE
         STY     DMA0DST.W
         LDA     #$0042          ; bank setup
         STA     DMA0BNKS.W
@@ -317,4 +365,3 @@ MESSAGE_DISKNONBOOTABLE:
         .DB     "  INSERT BOOT DISK  ",0
 MESSAGE_DISKNOTVALID:
         .DB     "     DISK ERROR     ",0
-

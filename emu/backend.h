@@ -57,6 +57,9 @@ unsigned long emu_get_tick_ns(void);
 // initialize screen with resolution WxH, output pixel format
 void emu_scr_init(int w, int h, EmuPixelFormat* pf);
 
+// set window (client/inner) size to WxH
+void emu_set_window_size(int w, int h);
+
 // free current screen
 void emu_scr_kill(void);
 
