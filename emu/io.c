@@ -203,6 +203,7 @@ BYTE io_read(ADDR p)
     case 1:     return 0x80 | stack_bank;
     case 2:     return active_int;
     case 3:     return 0x7F + (_RAM_SIZE >> 16);
+    case 4:     return genericint;
     case 16: case 17: case 18: case 19:
     case 20: case 21: case 22: case 23:
     case 24: case 25: case 26: case 27:
@@ -232,6 +233,7 @@ void io_write(ADDR p, BYTE v)
         if (v == 0xFF) e1100_reset();
         break;
     case 1:     stack_bank = 0x80 | v; break;
+    case 4:     genericint = v; break;
     case 40: case 41: case 42: case 43:
     case 44: case 45: case 46: case 47:
         floppy_write((p >> 2) & 1, p & 3, v); break;

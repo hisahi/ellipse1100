@@ -29,6 +29,11 @@ SOFTWARE.
 #define _RAM_SIZE 1048576
 #define _VRAM_SIZE 262144
 #define _ROM_SIZE 524288
+#define _ROM_MASK (_ROM_SIZE-1)
+
+#if (_ROM_SIZE & _ROM_MASK) != 0
+#error ROM size must be a power of two
+#endif
 
 #if _RAM_SIZE % 65536 != 0
 #error RAM size must be a multiple of 64 KB

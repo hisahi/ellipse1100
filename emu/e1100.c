@@ -60,10 +60,11 @@ void e1100_free(void)
     vpu_free();
 }
 
-inline void e1100_run(unsigned long c)
+inline unsigned long e1100_run(unsigned long c)
 {
-    cycles += c;
-    cpu_run_cycles(c);
+    unsigned long tmp = cpu_run_cycles(c);
+    cycles += tmp;
+    return tmp;
 }
 
 void e1100_post_cpu_cycle(void)
@@ -79,13 +80,15 @@ void e1100_post_cpu_cycle(void)
     }
 }
 
-void e1100_step_instruction(void)
+unsigned long e1100_step_instruction(void)
 {
+    unsigned long tmp = 0;
     cpu_debug = 1;
     cpu_debug_instr = 1;
     while (cpu_debug_instr && !cpu_halted())
-        e1100_run(1);
+        tmp += e1100_run(1);
     cpu_debug = _CPU_ALWAYS_DEBUG;
+    return tmp;
 }
 
 void e1100_change_system(VideoSystem sys)

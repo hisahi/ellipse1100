@@ -63,7 +63,7 @@ inline BYTE mem_read_transp(ADDR a)
     switch (hightwo)
     {
     case 0: /* ROM */
-        return (a >= _ROM_SIZE) ? (BYTE)-1 : rom[a];
+        return rom[a & _ROM_MASK];
     case 1: /* I/O or VRAM */
         return (a >= _VRAM_SIZE) ? io_read(a) : vram[a];
     case 2: case 3: /* RAM */

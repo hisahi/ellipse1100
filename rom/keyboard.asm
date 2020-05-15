@@ -162,6 +162,20 @@ KEYB_NMI_TIMER:
         PLP
         RTS
 
+; returns A 00000000ScCA0000
+;                   Shift, caps, Ctrl, Alt
+KEYB_GET_MODIFIERS:
+        PHP
+        ACC16
+        LDA     #0
+        ACC8
+        LDA     $800000|KEYB_KEYMODIFIER2.L
+        LSR     A
+        LSR     A
+        ORA     $800000|KEYB_KEYMODIFIER2.L
+        PLP
+        RTS
+
 KEYB_UPDATE_KEYS:
         PHP
         AXY16
@@ -309,6 +323,10 @@ KEYB_UPDATE_KEYS_IMMEDIATE:
         LDA     KEYB_KEYDOWNL.L
         RTS
 
+.ORG $7FE8
+KEYB_GET_MODIFIERS_TRAMPOLINE:
+        JSR     KEYB_GET_MODIFIERS.W
+        RTL
 .ORG $7FEC
 KEYB_NMI_TIMER_TRAMPOLINE:
         JSR     KEYB_NMI_TIMER.W

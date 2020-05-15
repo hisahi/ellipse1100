@@ -43,6 +43,7 @@ static coroutine cpu_coro;
 REG_16 oldS;
 ADDR lastAddrPC;
 BYTE lastOpcode = 0;
+static long long rancyc = 0;
 static long long runcyc = 0;
 int cpu_debug = _CPU_ALWAYS_DEBUG;
 int cpu_debug_instr = 0;
@@ -57,6 +58,7 @@ void cpu_instruction_loop(void);
 
 inline void cpu_end_cycle(void)
 {
+    ++rancyc;
     e1100_post_cpu_cycle();
     if (paused || --runcyc <= 0)
     {
@@ -66,10 +68,12 @@ inline void cpu_end_cycle(void)
     }
 }
 
-inline void cpu_run_cycles(unsigned long cycles)
+inline unsigned long cpu_run_cycles(unsigned long cycles)
 {
+    rancyc = 0;
     runcyc = cycles;
     coro_resume(&cpu_coro);
+    return rancyc;
 }
 
 void cpu_init(void)

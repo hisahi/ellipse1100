@@ -105,6 +105,7 @@ FLOPPY:
                          S = $03FF
                          interrupts are disabled
                          not in emulation mode
+                         all hardware interrupts disabled
           
           on Ellipse standard disk:
                last 32 bytes are partition table, entry for four partitions each

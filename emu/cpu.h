@@ -161,7 +161,7 @@ void cpu_irq(void);
 void cpu_nmi(void);
 void cpu_cop(void);
 void cpu_abort(void);
-void cpu_run_cycles(unsigned long cycles);
+unsigned long cpu_run_cycles(unsigned long cycles);
 void cpu_end_cycle(void);
 int cpu_halted(void);
 

@@ -206,12 +206,11 @@ int emulator_main()
 
             floppy_tick(acc_ms);
 
-            e1100_run(cyc_tot
+            total_cycles += e1100_run(cyc_tot
 #ifdef SLOWDOWN
                         / SLOWDOWN
 #endif
                         );
-            total_cycles += cyc_tot;
         }
 
         emu_delay_ms(3);

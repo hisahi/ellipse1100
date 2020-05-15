@@ -148,6 +148,7 @@ TEXT_UPDATE_CHARACTER_KNOWN_OFFSET:
         LDA     $FF&TEXT_TMP2.B          ; X coordinate
         A_Y_TO_VIDEO_VRAM_OFFSET
 
+TEXT_UPDATE_CHARACTER_KNOWN_VRAM_ADDR:
         TAY
         LDX     $FF&TEXT_TMP7.B
 ; X contains address to character bitmap (low byte)
@@ -164,32 +165,42 @@ TEXT_DRAW_CHARACTER:
         LDA     $FF&TEXT_TMP4.B
         PHA
         PLB
+        ACC16
+        PHD
+        LDA     #0
+        PHA
+        PLD
 .REPEAT 8 INDEX YOFF
         ACC8
         LDA     ($010000|FIXFONT_START).L,X
         XBA
+        PHX
+        LDA     7,S
+        TAX
 .REPEAT 6 INDEX XOFF
-        LDA     3,S
+        TXA
         XBA
         ASL     A
-        BCC     +
         XBA
-        LDA     2,S
-        .DB     $89     ; skip next XBA      
-+       XBA
-        STA     $0000.W,Y
+        BCC     +
+        LDA     6,S   
++       STA     $00.B,Y
+.IFLE XOFF 5
         INY
+.ENDIF
 .ENDR
+        PLX
         ACC16
 .IFLE YOFF 7
         INX
         TYA
         CLC
-        ADC     #$0200-6
+        ADC     #$0200-5
         TAY
 .ENDIF
 .ENDR
 @ENDCHAR:
+        PLD
         PLB
         PLA
         RTS

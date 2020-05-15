@@ -25,14 +25,18 @@
 ;
 
 .DEFINE BOOT_BACKGROUND_COLOR $55
-.DEFINE BOOT_DISK_MSG_X 30
+.DEFINE BOOT_DISK_MSG_X 26
 .DEFINE BOOT_DISK_MSG_Y 28
 .DEFINE COPYRIGHT_MSG_X 16
 .DEFINE COPYRIGHT_MSG_Y 46
 
         SEI
+        CLD
         CLC                     ; \ enter native mode 
         XCE                     ; / starting with 8-bit A, X, Y
+        AXY16
+        JSR     CHECKSUM
+
         LDA     #$00.B
         PHA
         PLB                     ; B = 0
@@ -63,6 +67,12 @@
         ACC8
         LDA     #BOOT_BACKGROUND_COLOR.b
         JSR     FAST_SCREEN_FILL
+
+; disable many HW interrupts
+        STZ     EINTGNRC.W
+        LDA     #%01000000
+        STA     FLP1STAT.W
+        STA     FLP2STAT.W
 
 ; set up interrupt trampolines
         PHB
@@ -102,6 +112,8 @@
         STA     $FFFF&SWRAMIRQ.w
 
         PLB                     ; restore ROM bank
+
+        STZ     FLP1SECT        ; sector, track, side all to 0
 
 ; copy ELLIPSE text logo to screen
         LDX     #42
@@ -171,16 +183,49 @@
         JSL     TEXT_WRSTRAT
         PLB
 
+; write menu message to screen
+        LDA     #MESSAGE_OPENMENU.w
+        LDX     #BOOT_DISK_MSG_X.w
+        LDY     #1+BOOT_DISK_MSG_Y.w
+        JSL     TEXT_WRSTRAT
+        PLB
+
+@SECOND_WAIT:
+; wait for about a second
+        ; enable VPU v-sync NMI
+        ACC8
+        LDA     VPUCNTRL.W
+        ORA     #$04
+        STA     VPUCNTRL.W
+        ACC16
+        LDX     #60
+-       WAI
+        DEX
+        BNE     -
+        ; disable VPU v-sync NMI
+        ACC8
+        LDA     VPUCNTRL.W
+        AND     #$FB
+        STA     VPUCNTRL.W
+
+        JSL     KEYB_UPDKEYS
+        JSL     KEYB_GETMODS
+        AND     #$10
+        BNE     BIOS_MENU
+
+; enable keyboard interrupt
+        LDA     #$01
+        STA     EINTGNRC.W
+
 ; set up floppy drive I to do IRQs
-        STZ     FLP1SECT        ; sector, track, side all to 0
-        ACC8                    ; make A 8-bit again
         LDA     #%01100000      ; enable IRQ
         STA     FLP1STAT
 
 FIRSTFLOPPYCHECK:
         JSR     CHECK_FLOPPY_DISK
-        BNE     GOT_FLOPPY
-
+        BEQ     +
+        JMP     GOT_FLOPPY
++
 ; copy "insert floppy" image to screen
         PHP
         AXY16
@@ -220,7 +265,24 @@ WAIT_FLOPPY_LOOP:
 @IRQWAI:
         WAI
         JSL     KEYB_UPDKEYS
-        BRA     WAIT_FLOPPY_LOOP
+        JSL     KEYB_GETMODS
+        AND     #$10
+        BEQ     WAIT_FLOPPY_LOOP
+BIOS_MENU:
+        ACC8
+        LDA     #0              ; disable floppy IRQ
+        STA     FLP1STAT
+        STA     TEXT_BGCOLOR.L
+        XY16
+        JSR     FAST_SCREEN_FILL.W
+
+        ACC16
+        LDA     #MESSAGE_MENU.w
+        LDX     #0
+        LDY     #4
+        JSL     TEXT_WRSTRAT
+
+        JMP     BIOS_MENU_LOOP
 
 GOT_FLOPPY:                     ; read first sector of floppy
 .ACCU 8
@@ -320,6 +382,8 @@ GOT_FLOPPY_CHECK_BOOT:
         LDA     #$80
         PHA
         PLB
+        ; disable many hardware interrupts
+        STZ     EINTGNRC.W
 
         AXY16
         LDA     #$0000
@@ -329,12 +393,30 @@ GOT_FLOPPY_CHECK_BOOT:
         TCS                     ; S to $03FF
         JML     $800008
 
+BIOS_MENU_LOOP:
+        ACC8
+        JSL     KEYB_UPDKEYS
+        JSL     KEYB_GETPKEY
+        BEQ     +
+        BCC     +
+        CMP     #$10
+        BEQ     BIOS_MENU_REBOOT
++       WAI
+        BRA     BIOS_MENU_LOOP
+
+BIOS_MENU_REBOOT:
+        ACC8
+        LDA     #$FF
+        STA     ESYSSTAT.W      ; system will reset here!
+        STP
+
 CHECK_FLOPPY_DISK:
         LDA     FLP1STAT
         AND     #%00011100.b
         RTS
 
 FAST_SCREEN_FILL:               ; assumes 8-bit A, 16-bit X, Y
+        ACC8
         STA     $800000.l
         PHP
         CLD
@@ -357,11 +439,48 @@ FAST_SCREEN_FILL:               ; assumes 8-bit A, 16-bit X, Y
         PLP
         RTS
 
+.DEFINE CHECKSUM_MINBANK $08
+.DEFINE CHECKSUM_MAXBANK $0F
+.ACCU 16
+.INDEX 16
+CHECKSUM:
+        LDA     #0
+        LDX     #0
+-       
+.REPEAT CHECKSUM_MAXBANK-CHECKSUM_MINBANK+1 INDEX BINDEX
+        CLC
+        ADC     (CHECKSUM_MINBANK+BINDEX)<<16.L,X
+.ENDR
+        INX
+        INX
+        BNE     -
+        CMP     #0
+        BNE     CHECKSUM_FAIL
+        RTS
+CHECKSUM_FAIL:                  ; this is bad, display red screen
+        ACC8
+        LDA     #$02.B
+        STA     VPUCNTRL.W
+        LDA     #00
+        JSR     FAST_SCREEN_FILL
+        AXY16
+        LDA     #$1F00
+        STA     $430000.L
+        STP
+
 MESSAGE_BLANK:
-        .DB     "                    ",0
+        .DB     "                            ",0
 MESSAGE_INSERTDISK:
-        .DB     "  INSERT BOOT DISK  ",0
+        .DB     "INSERT BOOT DISK IN DRIVE #1",0
 MESSAGE_DISKNONBOOTABLE:
-        .DB     "  INSERT BOOT DISK  ",0
+        .DB     "INSERT BOOT DISK IN DRIVE #1",0
+MESSAGE_OPENMENU:
+        .DB     "    PRESS -ALT- FOR MENU    ",0
 MESSAGE_DISKNOTVALID:
-        .DB     "     DISK ERROR     ",0
+        .DB     "         DISK ERROR         ",0
+
+MESSAGE_MENU:
+        .DB     "    ","ELLIPSE 1100 MENU",13,13
+        .DB     "    ","  -ESC-",9,9,"BOOT FROM FLOPPY",13
+        .DB     "    ","  -M-",9,9,"RAM TEST",13
+        .DB     0

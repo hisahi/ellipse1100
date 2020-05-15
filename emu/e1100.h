@@ -38,10 +38,10 @@ extern VideoSystem e1100_vsys;
 void e1100_init(VideoSystem sys);
 void e1100_reset(void);
 void e1100_change_system(VideoSystem sys);
-void e1100_run(unsigned long c);
+unsigned long e1100_run(unsigned long c);
 void e1100_post_cpu_cycle(void);
 void e1100_free(void);
 
-void e1100_step_instruction(void);
+unsigned long e1100_step_instruction(void);
 
 #endif /* _E1100_E1100_H */

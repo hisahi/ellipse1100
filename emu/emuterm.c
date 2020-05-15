@@ -110,7 +110,7 @@ void emu_term_do_line(const char* buf, size_t buflen)
     {
         if (last_cmd_i)
         {
-            e1100_step_instruction();
+            total_cycles += e1100_step_instruction();
             emulator_dump_state();
         }
         return;
@@ -141,7 +141,7 @@ void emu_term_do_line(const char* buf, size_t buflen)
     {
         emu_pause();
         last_cmd_i = 1;
-        e1100_step_instruction();
+        total_cycles += e1100_step_instruction();
         emulator_dump_state();
     }
     else if (!strcmp(tok0, "f") || !strcmp(tok0, "f1")) // floppy 1 mount

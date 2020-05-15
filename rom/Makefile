@@ -7,9 +7,8 @@ default: all
 
 ellipse.obj: FORCE
 	$(AS) $(AFLAGS) -o $@ ellipse.asm
-
 ellipse.rom: ellipse.obj
-	$(LD) $(LDFLAGS) ellipse.lnk $@
+	$(LD) $(LDFLAGS) ellipse.lnk $@ && ./e1100cs ellipse.rom
 
 floppies/hellow.obj: floppies/hellow.asm
 	$(AS) $(AFLAGS) -o $@ $^
