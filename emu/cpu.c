@@ -242,7 +242,7 @@ void cpu_do_reset(void)
 {
     reset = 0;
 #if _INTERRUPT_DEBUG
-    if (cpu_debug) emu_puts("--- RESET ---\n");
+    if (cpu_debug) puts("--- RESET ---");
 #endif
     regs.E = 1;
     regs.K = regs.B = 0;
@@ -288,7 +288,7 @@ void cpu_standard_interrupt(ADDR addr)
 void cpu_do_abort(void)
 {
 #if _INTERRUPT_DEBUG
-    if (cpu_debug) emu_puts("--- ABORT ---\n");
+    if (cpu_debug) puts("--- ABORT ---");
 #endif
 
     interrupt &= ~I_ABORT;
@@ -303,7 +303,7 @@ void cpu_do_abort(void)
 void cpu_do_nmi(void)
 {
 #if _INTERRUPT_DEBUG
-    if (cpu_debug) emu_puts("--- NMI ---\n");
+    if (cpu_debug) puts("--- NMI ---");
 #endif
     interrupt &= ~I_NMI;
     cpuWai = 0;
@@ -314,7 +314,7 @@ void cpu_do_nmi(void)
 void cpu_do_irq(void)
 {
 #if _INTERRUPT_DEBUG
-    if (cpu_debug) emu_puts("--- IRQ ---\n");
+    if (cpu_debug) puts("--- IRQ ---");
 #endif
     interrupt &= ~I_IRQ;
     cpuWai = 0;

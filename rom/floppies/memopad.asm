@@ -47,9 +47,10 @@ BEGINNING:
 
 @LOOP:
         ACC8
-        LDA     #$14
-        LDX     #$12
-        JSL     KEYB_GETPKEY
+        JSL     KEYB_UPDKEYSI
+        LDA     #28
+        LDX     #26
+        JSL     KEYB_GETKEY
         BEQ     +
         BCC     +
         JSL     TEXT_WRCHR
@@ -65,10 +66,10 @@ OLDNMI:
         .DL     0
 
 NMICHECKKEYB:
-        LDA     IN_NMI
+        LDA     IN_NMI.W
         BNE     @RET
-        DEC     IN_NMI
-        JSL     KEYB_UPDKEYS
+        DEC     IN_NMI.W
+        JSL     KEYB_INCTIMER
         JSL     TEXT_FLASHCUR
-        STZ     IN_NMI
+        STZ     IN_NMI.W
 @RET:   JML     [OLDNMI.W]

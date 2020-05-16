@@ -120,9 +120,7 @@ void mem_write(ADDR a, BYTE v)
         break;
     case 1: /* I/O, VRAM */
         if (a >= _VRAM_SIZE) /* I/O */
-        {
             io_write(a, v);
-        }
         else /* VRAM */
             vram[a] = v;
         break;

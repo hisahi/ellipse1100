@@ -74,6 +74,7 @@ ROMCODE:
         .INCLUDE "boot.asm"
         .INCLUDE "vec.asm"
         .INCLUDE "ints.asm"
+        .INCLUDE "keytbls.asm"
 
 .ORGA $00FFE4           ; NATIVE MODE INTERRUPT HANDLERS
         .DW INTH_COP            ; COP

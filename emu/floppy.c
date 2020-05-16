@@ -233,7 +233,7 @@ static void floppy_seek_done(floppy_drive* drive)
 static void floppy_seek(floppy_drive* drive, int write)
 {
 #if _FLOPPY_DEBUG
-    emu_puts("Seeking floppy drive");
+    puts("Seeking floppy drive");
 #endif
     unsigned target_track = 127 & drive->target_track;
     drive->side = drive->target_track >> 7;

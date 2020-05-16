@@ -34,6 +34,8 @@
 
 INTH_RET:
         AXY16
+        PLY
+        PLX
         PLA
 INTH_RTI:
         RTI
@@ -44,11 +46,13 @@ INTH_NMI:                       ; NMI native handler, jump to SW handler
         BMI     INTH_RTI
         AXY16
         CLD
-        PHA                     ; load interrupt device number
+        PHA
+        PHX
+        PHY
         PHK                     ; make sure RTI goes to INTH_RET
         PEA     INTH_RET
         PHP
-        LDA     $700002
+        LDA     $700002         ; load interrupt device number
         AND     #$FF.W
         JML     SWRAMNMI-1      ; jump to trampoline
 INTH_IRQ:                       ; IRQ native handler, jump to SW handler
@@ -57,11 +61,13 @@ INTH_IRQ:                       ; IRQ native handler, jump to SW handler
         BMI     INTH_RTI
         AXY16
         CLD
-        PHA                     ; load interrupt device number
+        PHA
+        PHX
+        PHY          
         PHK                     ; make sure RTI goes to INTH_RET
         PEA     INTH_RET
         PHP
-        LDA     $700002
+        LDA     $700002         ; load interrupt device number
         AND     #$FF.W
         JML     SWRAMIRQ-1      ; jump to trampoline
 

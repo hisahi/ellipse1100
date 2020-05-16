@@ -280,6 +280,14 @@ BIOS_MENU:
         JSR     FAST_SCREEN_FILL.W
 
         ACC16
+        LDA     #MESSAGE_MENU_CHECKSUM.W
+        LDX     #4
+        LDY     #46
+        JSL     TEXT_WRSTRAT
+
+        LDA     $07FFFE.L
+        JSR     WRITE_HEX_WORD
+
         LDA     #MESSAGE_MENU.w
         LDX     #0
         LDY     #4
@@ -400,7 +408,7 @@ GOT_FLOPPY_CHECK_BOOT:
 BIOS_MENU_LOOP:
         ACC8
         JSL     KEYB_UPDKEYS
-        JSL     KEYB_GETPKEY
+        JSL     KEYB_GETKEY
         BEQ     +
         BCC     +
         CMP     #$10
@@ -470,6 +478,36 @@ CHECKSUM_FAIL:                  ; this is bad, display red screen
         STA     $430000.L
         STP
 
+WRITE_HEX_BYTE:
+        PHA
+        
+        AND     #$F0
+        LSR     A
+        LSR     A
+        LSR     A
+        LSR     A
+        TAX
+        LDA     TEXT_HEXDIGITS.W,X
+        JSL     TEXT_WRCHR
+
+        LDA     1,S
+        
+        AND     #$0F
+        TAX
+        LDA     TEXT_HEXDIGITS.W,X
+        JSL     TEXT_WRCHR
+
+        PLA
+        RTS
+
+WRITE_HEX_WORD:
+        XBA
+        JSR     WRITE_HEX_BYTE
+        XBA
+        JMP     WRITE_HEX_BYTE
+
+TEXT_HEXDIGITS:
+        .DB     "0123456789ABCDEF"
 MESSAGE_BLANK:
         .DB     "                            ",0
 MESSAGE_INSERTDISK:
@@ -477,12 +515,17 @@ MESSAGE_INSERTDISK:
 MESSAGE_DISKNONBOOTABLE:
         .DB     "INSERT BOOT DISK IN DRIVE #1",0
 MESSAGE_OPENMENU:
-        .DB     "    PRESS -ALT- FOR MENU    ",0
+        .DB     "       -ALT- FOR MENU       ",0
 MESSAGE_DISKNOTVALID:
         .DB     "         DISK ERROR         ",0
 
+MESSAGE_MENU_CHECKSUM:
+        .DB     "ROM CHECKSUM $",0
 MESSAGE_MENU:
         .DB     "    ","ELLIPSE 1100 MENU",13,13
         .DB     "    ","  -ESC-",9,9,"BOOT FROM FLOPPY",13
-        .DB     "    ","  -M-",9,9,"RAM TEST",13
+        .DB     13
+        .DB     "    ","  -B-",9,9,"BASIC",13
+        .DB     "    ","  -M-",9,9,"MONITOR",13
+        .DB     "    ","  -Q-",9,9,"RAM TEST",13
         .DB     0
