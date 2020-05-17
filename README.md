@@ -25,12 +25,11 @@ simple networking with Ellipse's own Conicnet protocol and SublimOS, a
 multi-tasking graphical operating system.
 
 ## Specifications & documentation
-* Hardware specifications:
-  * (TODO)
-* Memory-mapped IO registers: (TODO)
-* Ellipse ROM functions: (TODO)
-* Ellipse DOS functions: (TODO)
-* Emulator documentation: (TODO)
+* [Hardware specifications](https://github.com/hisahi/ellipse1100/blob/master/doc/HARDWARE.TXT)
+* [Memory-mapped IO registers](https://github.com/hisahi/ellipse1100/blob/master/doc/IO.TXT)
+* Ellipse ROM functions (TODO)
+* Ellipse DOS functions (TODO)
+* Emulator documentation (TODO)
 
 # e1100em (Ellipse 1100 Emulator) and this repository
 

@@ -27,6 +27,8 @@
 
 .INCLUDE "e1100.asm"
 
+.DEFINE _DEBUG 1
+
 .MEMORYMAP
 SLOTSIZE $10000
 DEFAULTSLOT 0
@@ -50,7 +52,7 @@ BANKS 8
 
 .ORGA $000000           ; DATA
 NOTICE_START:
-        .DB     "(C) ELLIPSE DATA ELECTRONICS.   1984/1985 v1.0.0"
+        .DB     "(C) ELLIPSE DATA ELECTRONICS.   1984/1985 v0.1.0"
         .DB     0
 ROM_VERSION:
         .DW     $0100
@@ -96,13 +98,14 @@ ROMCODE:
 
 .BANK 1 .SLOT 1
 
-.ORG $000000            ; FIXED-WIDTH TEXT & KEYBOARD CODE
+.ORG $000000            ; FIXED-WIDTH TEXT, KEYBOARD, ML MONITOR
 
 FIXFONT_START:
         .INCBIN "fixfont.bin"
 FIXFONT_END:
         .INCLUDE "fixtext.asm"
         .INCLUDE "keyboard.asm"
+        .INCLUDE "monitor.asm"
         
 .BANK 2 .SLOT 2
 

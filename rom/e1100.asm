@@ -94,6 +94,10 @@
 .DEFINE ROM_SWAPNMI $00FD00.L
 .DEFINE ROM_SWAPIRQ $00FE00.L
 
+.DEFINE ROM_UNSWAPBRK $00FCC0.L
+.DEFINE ROM_UNSWAPNMI $00FDC0.L
+.DEFINE ROM_UNSWAPIRQ $00FEC0.L
+
 ; addresses to software-configurable interrupt handlers
 .DEFINE SWRAMCOP $80FFF1 EXPORT
 .DEFINE SWRAMBRK $80FFF5 EXPORT
@@ -103,20 +107,54 @@
 ; helper macros
 
 .MACRO ACC8             ; set A to be 8b
-        SEP #$20
+        SEP     #$20
 .ENDM
 .MACRO ACC16            ; set A to be 16b
-        REP #$20
+        REP     #$20
 .ENDM
 .MACRO XY8              ; set X,Y to be 8b
-        SEP #$10
+        SEP     #$10
 .ENDM
 .MACRO XY16             ; set X,Y to be 16b
-        REP #$10
+        REP     #$10
 .ENDM
 .MACRO AXY8             ; set A,X,Y to be 8b
-        SEP #$30
+        SEP     #$30
 .ENDM
 .MACRO AXY16            ; set A,X,Y to be 16b
-        REP #$30
+        REP     #$30
+.ENDM
+
+.MACRO SETB8            ; set A to 8b and copy value to B; clobbers A
+        ACC8
+        LDA     #\1
+        PHA
+        PLB
+.ENDM
+
+.MACRO SETB16           ; set A to 16b and copy value to B; clobbers A
+        SETB8   \1
+        ACC16
+.ENDM
+
+.MACRO SETBD8           ; set A to 8b and copy values to B and D; clobbers A
+        ACC8
+        LDA     #\1
+        PHA
+        PLB
+        ACC16
+        LDA     #\2
+        PHA
+        PLD
+.ENDM
+
+.MACRO SETBD16          ; set A to 16b and copy values to B and D; clobbers A
+        ACC16
+        LDA     #\2
+        PHA
+        PLD
+        ACC8
+        LDA     #\1
+        PHA
+        PLB
 .ENDM

@@ -29,8 +29,8 @@
 
 .DEFINE TEXT_TMP1 $1000
 .DEFINE TEXT_TMP2 $1002
-.DEFINE TEXT_TMP3 $1004
-.DEFINE TEXT_TMP4 $1006
+.DEFINE TEXT_TMP30 $1004
+.DEFINE TEXT_TMP40 $1006
 .DEFINE TEXT_TMP5 $80100A
 .DEFINE TEXT_TMP6 $100C
 .DEFINE TEXT_TMP6L $80100C
@@ -43,6 +43,10 @@
 .DEFINE TEXT_CURSORTICKS $1014
 .DEFINE TEXT_CURSORON $1016
 .DEFINE TEXT_CURSORMOVED $1018
+.DEFINE TEXT_TMP8 $101E
+.DEFINE TEXT_TMP31 $1024
+.DEFINE TEXT_TMP41 $1026
+.DEFINE TEXT_TMP51 $1028
 ; characters
 .DEFINE TEXT_VRAM_CH $1100
 ; colors
@@ -97,13 +101,13 @@
 
 .MACRO A_Y_TO_VIDEO_VRAM_OFFSET
         ASL     A                       ; A = A * 6
-        STA     $FF&TEXT_TMP4.B
+        STA     $FF&TEXT_TMP4\1.B
         ASL     A
         CLC
-        ADC     $FF&TEXT_TMP4.B
+        ADC     $FF&TEXT_TMP4\1.B
         CLC
         ADC     #16
-        STA     $FF&TEXT_TMP3.B
+        STA     $FF&TEXT_TMP3\1.B
         TYA                             ; Y coordinate
         LSR     A                       ; A = (A >> 4) & 3
         LSR     A
@@ -111,7 +115,7 @@
         LSR     A
         AND     #3
         ORA     #$40
-        STA     $FF&TEXT_TMP4.B
+        STA     $FF&TEXT_TMP4\1.B
         TYA                             ; Y coordinate
         AND     #$0F                    ; A = (A & 0x0F) << 12
         ASL     A
@@ -120,8 +124,8 @@
         ASL     A
         XBA    
         CLC
-        ADC     $FF&TEXT_TMP3.B         ; A += (X << 3 + 16)
-        STA     $FF&TEXT_TMP3.B
+        ADC     $FF&TEXT_TMP3\1.B       ; A += (X << 3 + 16)
+        STA     $FF&TEXT_TMP3\1.B
 .ENDM
 
 .ACCU 16
@@ -146,7 +150,7 @@ TEXT_UPDATE_CHARACTER_KNOWN_OFFSET:
 ; now use x,y values to compute target screen address and store it to
 ;     TEXT_TMP3 (address), TEXT_TMP4 (bank)
         LDA     $FF&TEXT_TMP2.B          ; X coordinate
-        A_Y_TO_VIDEO_VRAM_OFFSET
+        A_Y_TO_VIDEO_VRAM_OFFSET 0
 
 TEXT_UPDATE_CHARACTER_KNOWN_VRAM_ADDR:
         TAY
@@ -162,7 +166,7 @@ TEXT_DRAW_CHARACTER:
         PHA
 ; switch data bank to destination VRAM bank
         PHB
-        LDA     $FF&TEXT_TMP4.B
+        LDA     $FF&TEXT_TMP40.B
         PHA
         PLB
         ACC16
@@ -174,8 +178,8 @@ TEXT_DRAW_CHARACTER:
         ACC8
         LDA     ($010000|FIXFONT_START).L,X
         XBA
-        PHX
-        LDA     7,S
+        STX     $FF&TEXT_TMP8.B
+        LDA     5,S
         TAX
 .REPEAT 6 INDEX XOFF
         TXA
@@ -183,13 +187,13 @@ TEXT_DRAW_CHARACTER:
         ASL     A
         XBA
         BCC     +
-        LDA     6,S   
+        LDA     4,S   
 +       STA     $00.B,Y
 .IFLE XOFF 5
         INY
 .ENDIF
 .ENDR
-        PLX
+        LDX     $FF&TEXT_TMP8.B
         ACC16
 .IFLE YOFF 7
         INX
@@ -603,25 +607,26 @@ TEXT_FLASH_CURSOR:
         RTS
 @BLINKCHAR:
 .ACCU 8
+        SEI
         LDA     $FFFF&TEXT_BGCOLOR.W
         EOR     $FFFF&TEXT_FGCOLOR.W
-        STA     TEXT_TMP5.W
-        STA     TEXT_TMP5+1.W
+        STA     TEXT_TMP51.W
+        STA     TEXT_TMP51+1.W
         ACC16
         LDA     TEXT_CURSORX.W
         LDY     TEXT_CURSORY.W
-        A_Y_TO_VIDEO_VRAM_OFFSET
+        A_Y_TO_VIDEO_VRAM_OFFSET 1
         ACC8
-        LDX     TEXT_TMP3.W
+        LDX     TEXT_TMP31.W
         PHB
-        LDA     TEXT_TMP4.W
+        LDA     TEXT_TMP41.W
         PHA
         PLB
         ACC16
 .REPEAT 8 INDEX OFFSETY
 .REPEAT 3 INDEX OFFSETX
         LDA     $0000+OFFSETX*2+OFFSETY*512.W,X
-        EOR     $800000|TEXT_TMP5.L
+        EOR     $800000|TEXT_TMP51.L
         STA     $0000+OFFSETX*2+OFFSETY*512.W,X
 .ENDR
 .ENDR

@@ -1,7 +1,7 @@
 IO      0-7    SYS
         IO      0       R       system status                          --------
                         W       write $FF to reset device
-        IO      1       R/W     stack (RAM $0000:$03FF) bank
+        IO      1       R/W     stack (RAM $0000:$03FF) bits 22:15
         IO      2       R       current interrupt device (IRQ or NMI)
                             $02         VIDEO V-SYNC
                             $03         VIDEO H-SYNC

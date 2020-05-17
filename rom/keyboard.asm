@@ -25,13 +25,14 @@
 ;
 
 .BANK 1
-; DMA0 is reserved for text mode
+
 .ORG $4000
 
 .DEFINE KEYBIO $7010
 
 ; KEYCODETABLE, KEYB_APPLY_CAPS_TO_KEY in keytbls.asm
 
+.DEFINE KEYB_TMP_NMI $0EEA
 .DEFINE KEYB_NMI_TIMER $0EEC
 .DEFINE KEYB_TMP3 $0EEE
 .DEFINE KEYB_TMP2 $0EF0
@@ -48,8 +49,8 @@
 .DEFINE KEYB_KEYCACHE $0F00
 
 .MACRO ENTERKEYBRAM
-        PHD
         PHB
+        PHD
         ACC8
         LDA     #$00
         PHA
@@ -60,8 +61,8 @@
 .ENDM
 
 .MACRO EXITKEYBRAM
-        PLB
         PLD
+        PLB
 .ENDM
 
 ; get currently pressed key in A
@@ -139,6 +140,9 @@ KEYB_UPDATE_KEYS_IMMEDIATE:
         STZ     KEYB_KEYMODIFIER1&$FF.B         ; also KEYB_KEYMODIFIER2
         LDA     #0
         ACC8
+
+        LDA     KEYB_NMI_TIMER&$FF.B
+        STA     KEYB_TMP_NMI&$FF.B
 
 ; update modifiers (Ctrl, Shift, Alt, caps)
         LDA     KEYBIO.W                        ; bit 3 = Ctrl, bit 4 = LSh,
@@ -240,7 +244,7 @@ KEYB_UPDATE_KEYS_IMMEDIATE:
         LDA     #$FF                            ; load #$FF again to store to
         STA     KEYB_NEWKEYPRESSED&$FF.B        ; "new key pressed"
         BRA     _f                              ; skip some redundant insrts
-+       LDA     KEYB_NMI_TIMER&$FF.B        ; check NMI timer
++       LDA     KEYB_TMP_NMI&$FF.B          ; check NMI timer
         BEQ     ++                              ; increase key down ticks
 __      INC     KEYB_KEYDOWNTICKS&$FF.B         ; only if NMI timer <>0
 ++      LDA     #$FF                            ; load #$FF again to store to

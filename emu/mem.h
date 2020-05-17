@@ -27,7 +27,7 @@ SOFTWARE.
 #define _E1100_MEM_H
 
 #define _RAM_SIZE 1048576
-#define _VRAM_SIZE 262144
+#define _VRAM_SIZE 524288
 #define _ROM_SIZE 524288
 #define _ROM_MASK (_ROM_SIZE-1)
 
@@ -45,8 +45,9 @@ SOFTWARE.
 
 typedef uint32_t ADDR;
 #define ADDR_MASK 0xFFFFFFU
+#define ADDR_MASK16 0xFFFFU
 #define MASK_ADDR(x) (ADDR_MASK & (x))
-#define BANK_ADDR(b,a) (((b) << 16) | MASK_ADDR(a))
+#define BANK_ADDR(b,a) (((b) << 16) | (ADDR_MASK16 & (a)))
 
 extern BYTE stack_bank;
 

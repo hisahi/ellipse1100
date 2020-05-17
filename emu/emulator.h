@@ -35,6 +35,7 @@ SOFTWARE.
 #define _INTERRUPT_DEBUG 0
 #define _DMA_DEBUG 0
 #define _FLOPPY_DEBUG 0
+#define _STACK_DEBUG 0
 #define SLOWDOWN 4
 
 #define MS_PER_S 1000ULL

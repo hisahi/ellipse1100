@@ -57,6 +57,7 @@ void cpu_instruction_WAI(AddrMode am)
 
 void cpu_instruction_BRK(AddrMode am)
 {
+    if (cpu_debug) printf("BRK encountered at $%02x:%04x\n", regs.K, regs.PC);
     ADDR r = regs.E ? 0xFFFE : 0xFFE6;
     mem_read(cpu_inc_pc()); END_CYCLE();
     if (!regs.E)

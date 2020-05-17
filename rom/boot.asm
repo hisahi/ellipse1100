@@ -184,12 +184,24 @@ ALMOSTRESET:
         JSL     TEXT_WRSTRAT
         PLB
 
+.IF _DEBUG != 0
+        LDX     #COPYRIGHT_MSG_X
+        LDY     #25
+        LDA     #MESSAGE_DEBUG
+        JSL     TEXT_WRSTRAT
+.ENDIF
+
 ; write menu message to screen
         LDA     #MESSAGE_OPENMENU.w
         LDX     #BOOT_DISK_MSG_X.w
         LDY     #1+BOOT_DISK_MSG_Y.w
         JSL     TEXT_WRSTRAT
         PLB
+
+.IF _DEBUG != 0
+        ; development build; skip waiting period
+        BRA     @SKIPWAIT
+.ENDIF
 
 @SECOND_WAIT:
 ; wait for about a second
@@ -209,14 +221,17 @@ ALMOSTRESET:
         AND     #$FB
         STA     VPUCNTRL.W
 
-        JSL     KEYB_UPDKEYS
-        JSL     KEYB_GETMODS
-        AND     #$10
-        BNE     BIOS_MENU
+@SKIPWAIT:     
+        ACC8
 
 ; enable keyboard interrupt
         LDA     #$01
         STA     EINTGNRC.W
+
+        JSL     KEYB_UPDKEYS
+        JSL     KEYB_GETMODS
+        AND     #$10
+        BNE     BIOS_MENU
 
 ; set up floppy drive I to do IRQs
         LDA     #%01100000      ; enable IRQ
@@ -279,10 +294,27 @@ BIOS_MENU:
         XY16
         JSR     FAST_SCREEN_FILL.W
 
+        ACC8
+        PHB
+        LDA     #$08
+        PHA
+        PLB
+        LDX     #COPYRIGHT_MSG_X
+        LDY     #4
+        LDA     #$0000
+        JSL     TEXT_WRSTRAT
+        PLB
+
         ACC16
+.IF _DEBUG != 0
+        LDX     #COPYRIGHT_MSG_X
+        LDY     #5
+        LDA     #MESSAGE_DEBUG.W
+        JSL     TEXT_WRSTRAT
+.ENDIF
         LDA     #MESSAGE_MENU_CHECKSUM.W
-        LDX     #4
-        LDY     #46
+        LDX     #54
+        LDY     #6
         JSL     TEXT_WRSTRAT
 
         LDA     $07FFFE.L
@@ -290,7 +322,7 @@ BIOS_MENU:
 
         LDA     #MESSAGE_MENU.w
         LDX     #0
-        LDY     #4
+        LDY     #6
         JSL     TEXT_WRSTRAT
 
         JMP     BIOS_MENU_LOOP
@@ -413,11 +445,17 @@ BIOS_MENU_LOOP:
         BCC     +
         CMP     #$10
         BEQ     BIOS_MENU_REBOOT
+        BIT     $0F44.W
+        BMI     BIOS_MENU_MONITOR
 +       WAI
         BRA     BIOS_MENU_LOOP
 
 BIOS_MENU_REBOOT:
         ACC8
+        JMP     ALMOSTRESET
+
+BIOS_MENU_MONITOR:
+        JSL     $018000.L
         JMP     ALMOSTRESET
 
 CHECK_FLOPPY_DISK:
@@ -508,6 +546,10 @@ WRITE_HEX_WORD:
 
 TEXT_HEXDIGITS:
         .DB     "0123456789ABCDEF"
+.IF _DEBUG != 0
+MESSAGE_DEBUG:
+        .DB     "FOR TESTING PURPOSES ONLY",0
+.ENDIF
 MESSAGE_BLANK:
         .DB     "                            ",0
 MESSAGE_INSERTDISK:
@@ -527,5 +569,8 @@ MESSAGE_MENU:
         .DB     13
         .DB     "    ","  -B-",9,9,"BASIC",13
         .DB     "    ","  -M-",9,9,"MONITOR",13
+.IF _DEBUG != 0
+        .DB     13
         .DB     "    ","  -Q-",9,9,"RAM TEST",13
+.ENDIF
         .DB     0

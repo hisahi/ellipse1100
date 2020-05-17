@@ -1,0 +1,138 @@
+
+
+
+========================================
+Ellipse 1100 Memory Mapped I/O Registers
+========================================
+
+Only the lowest byte matters when interfacing with memory-mapped I/O.
+
+$00     Read            System status.
+                                --------
+$00     Write           System reset. Write #$FF to hard reset.
+$01     Read/Write      The "stack half-bank". Controls the RAM area
+                        that $00:0000 - $00:03FF points at. For example:
+                            $00 means $80:0000 - $80:03FF,
+                            $01 means $80:8000 - $80:83FF,
+                            $02 means $81:0000 - $81:03FF, etc.
+$02     Read            The device number that served the last interrupt
+                        (IRQ or NMI).
+                            $02         Video screen V-sync (NMI).
+                            $03         Video screen H-sync (NMI/IRQ).
+                            $08         DMA channel 0 finished copy (NMI/IRQ).
+                            $09         DMA channel 1 finished copy (NMI/IRQ).
+                            $0A         DMA channel 2 finished copy (NMI/IRQ).
+                            $0B         DMA channel 3 finished copy (NMI/IRQ).
+                            $0C         Keyboard key pressed/released (IRQ).
+                            $0D         Mouse moved (IRQ).
+                            $0E         Joystick 1 moved (IRQ).
+                            $0F         Joystick 2 moved (IRQ).
+                            $10         Floppy drive 1 finished seeking,
+                                            media was inserted/ejected or
+                                            read/write complete (IRQ).
+                            $11         Floppy drive 2 finished seeking,
+                                            media was inserted/ejected or
+                                            read/write complete (IRQ).
+$03     Read            The highest RAM bank that does not mirror.
+                        $8F on standard configurations.
+$04     Read/Write      Controls interrupts for some devices.
+                                -------K
+                                    K: Enable keyboard IRQs.
+$10                     Keyboard keys. 1 means pressed and 0 not pressed.
+...     Read            Arranged in a matrix with one bit per key; see
+$1F                     KMATRIX.txt for full matrix.
+
+$28     Read            Floppy drive #1 status.
+                                VEiTTTW-
+                                    V: 1 if floppy I/O register can be used to
+                                        read or write (not seeking, etc.).
+                                    E: 1 if floppy I/O register contains an
+                                        error code.
+                                    i: 1 if floppy IRQs are enabled.
+                                    TTT: number of sectors per track on the
+                                            current floppy.
+                                        000:    no media
+                                        011:    12 sectors (960 KB)
+                                        100:    16 sectors (1280 KB)
+                                        101:    20 sectors (1600 KB)
+                                    W: 1 if current media is write-protected.
+$28     Write           Floppy drive #1 control.
+                                -Ei---WR
+                                    E: 1 to acknowledge error and bring drive
+                                        out of error state.
+                                    i: 1 if floppy IRQs are enabled.
+                                    WR: 00 to not seek.
+                                        01 to start a seek to read.
+                                        10 to start a seek to write.
+                                        11 to start a seek only.
+$29     Read/Write      Current floppy sector; only low 5 bits matter.
+                        Invalid sector for current media will cause an error
+                        on seek.
+$2A     Read/Write      Current floppy side and track. Highest bit is side,
+                        while the low 7 bits are the track.
+                        Invalid track for current media will cause an error
+                        on seek.
+$2B     Read/Write      Floppy I/O register. Use this to read or write one
+                        byte at a time after seek-to-read or seek-to-write,
+                        or read an error code if E is set to 1.
+                        When writing, the sector is only written once all
+                        512 bytes in that sector have been-
+                        Error codes:
+                            $01     Floppy is busy with another R/W operation
+                            $02     No disk inserted, or removed during R/W
+                            $03     Seek error, or invalid sector/track.
+                            $04     Read error.
+                            $05     Write error.
+$2C     Read            Floppy drive #2 status.
+$2C     Write           Floppy drive #2 control.
+$2D     Read/Write      Floppy drive #2 sector.
+$2E     Read/Write      Floppy drive #2 side & track.
+$2F     Read/Write      Floppy drive #2 I/o.
+$38     Read/Write      Video control register.
+                                ----PMSm
+                                    P: 0 if bitmap is at $40:0000 - $42:FFFF
+                                       1 if bitmap is at $44:0000 - $46:FFFF
+                                    M: 1 if V-sync NMI is enabled.
+                                    S: 1 if screen rendering,
+                                       0 if screen off.
+                                    m: 0 for 512x384 256 colors,
+                                       1 for 1024x768 4 colors (grayscale).
+$40     Read/Write      DMA channel #0 control.
+                                E--rFfMI
+                                    E: 1 to enable DMA, 0 to disable.
+                                    r: 1 to reset "copied bytes" counter.
+                                    F: 1 if the destination address should
+                                       remain the same, 0 if incremented
+                                       after every byte (increments only
+                                       16-bit; bank is not affected).
+                                    f: 1 if the source address should remain
+                                       the same, 0 if incremented after every
+                                       byte (increments only 16-bit; bank is
+                                       not affected).
+                                    M: Enable NMI when transfer complete.
+                                    I: Enable IRQ when transfer complete.
+$41     Read            DMA channel #0 status.
+                                R-------
+                                    R: 1 if transfer ongoing, 0 if not.
+$42     Read            DMA channel #0 copied byte counter, low byte.
+$43     Read            DMA channel #0 copied byte counter, high byte.
+$48     Read/Write      DMA channel #0 target bank.
+$49     Read/Write      DMA channel #0 source bank.
+                                Note that DMA ignores bank 0 special memory map
+                                and thus bank 0 is entirely ROM.
+$4A     Read/Write      DMA channel #0 transfer count, low byte.
+                                Note that 0 means 65536 bytes, not 0.
+$4B     Read/Write      DMA channel #0 transfer count, high byte.
+$4C     Read/Write      DMA channel #0 destination address, low byte.
+$4D     Read/Write      DMA channel #0 destination address, high byte.
+$4E     Read/Write      DMA channel #0 source address, low byte.
+$4F     Read/Write      DMA channel #0 source address, high byte.
+$50
+...     ...             DMA channel #1.
+$5F
+$60
+...     ...             DMA channel #2.
+$6F
+$70
+...     ...             DMA channel #3.
+$7F

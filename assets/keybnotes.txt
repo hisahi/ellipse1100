@@ -26,6 +26,7 @@ Matrix
 6	NP(	NP7	NP4	NP1	NP0				NP)	NP8	NP5	NP2		
 7	NP/	NP9	NP6	NP3					NP*	NP-	NP+	NPEnt
 
+keycache = (col << 3) | row
 
 
 

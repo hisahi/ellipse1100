@@ -1,0 +1,47 @@
+
+
+
+====================================
+Ellipse 1100 Hardware Specifications
+====================================
+
++-------------+-------------------------------------------------------------+
+| CPU         | Western Design Center W65C816S                              |
+|             |              @ 8.05 MHz (NTSC), 7.76 MHz (PAL)              |
+| Memory      | ROM 512 KB, VRAM 512 KB, RAM 1 MB (expandable to 8 MB)      |
+| Graphics    | 512x384 @ 256 colors (out of 32768) or 1024x768 @ 4 colors  |
+| Audio       | 8-bit stereo DAC at software-configurable sample rate       |
+| Ports       | Addon port with access to system bus                        |
+|             |      1x serial (RS-232), 1x parallel (Centronics),          |
+|             |      audio-out, TV out                                      |
+| Floppy      | 2x 3.5 inch floppy drives with                              |
+|             |      960 KB, 1280 KB or 1600 KB disk support                |
+| Hard Drive  | None by default, but available                              |
+| DMA         | 4 DMA channels, moving data at CPU speed (one byte / cycle) |
++-------------+-------------------------------------------------------------+
+
+
+=======================
+Ellipse 1100 Memory Map
+=======================
+
+===Bank 0===
+
++-------------+-------------------------------------------------------------+
+| $0000:$03FF | Mirrors RAM at "stack semibank" (see IO.TXT)                |
+| $0400:$3FFF | Mirrors RAM at bank 0 @ $0400:$3FFF                         |
+| $4000:$7FFF | Memory mapped I/O                                           |
+| $8000:$FFFF | ROM at bank 0 @ $8000:$FFFF                                 |
++-------------+-------------------------------------------------------------+
+
+===Other banks===
+
++-------------+-------------------------------------------------------------+
+|   $01:  $07 | ROM banks $01:$07                                           |
+|   $08:  $3F | Mirrors ROM at bank&7 ($08 = $00, $23 = $03, $3F = $07...)  |
+|   $40:  $47 | VRAM                                                        |
+|   $48:  $7F | Memory mapped I/O                                           |
+|   $80:  $8F | RAM (1 MB)                                                  |
+|   $90:  $FF | Expansion or mirror RAM                                     |
++-------------+-------------------------------------------------------------+
+

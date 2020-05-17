@@ -36,10 +36,13 @@ BEGINNING:
 
         LDA     #NMICHECKKEYB.W
         LDX     #OLDNMI.W
-        LDY     #$80
+        LDY     #$0080.W
         JSL     ROM_SWAPNMI.L
+        
+        LDA     #$01                    ; enable keyboard interrupt
+        STA     IOBANK|EINTGNRC.L
 
-        ACC8
+        ACC8                            ; enable VSYNC NMI
         LDA     IOBANK|VPUCNTRL.L
         ORA     #$04
         STA     IOBANK|VPUCNTRL.L
@@ -66,6 +69,11 @@ OLDNMI:
         .DL     0
 
 NMICHECKKEYB:
+        ACC8
+        LDA     #$80
+        PHA
+        PLB
+        ACC16
         LDA     IN_NMI.W
         BNE     @RET
         DEC     IN_NMI.W
