@@ -38,12 +38,13 @@
         JSR     CHECKSUM
 
 ALMOSTRESET:
+        XY16
+        ACC8
+
         LDA     #$00.B
         PHA
         PLB                     ; B = 0
 
-        XY16
-        ACC8
         LDA     #$02.B
         STA     VPUCNTRL.W
 
@@ -293,19 +294,23 @@ BIOS_MENU:
         STA     TEXT_BGCOLOR.L
         XY16
         JSR     FAST_SCREEN_FILL.W
+        
+        CLC
+        JSL     TEXT_CLRSCR.L
 
         ACC8
         PHB
         LDA     #$08
         PHA
         PLB
+
+        ACC16
         LDX     #COPYRIGHT_MSG_X
         LDY     #4
         LDA     #$0000
         JSL     TEXT_WRSTRAT
         PLB
 
-        ACC16
 .IF _DEBUG != 0
         LDX     #COPYRIGHT_MSG_X
         LDY     #5
@@ -318,7 +323,7 @@ BIOS_MENU:
         JSL     TEXT_WRSTRAT
 
         LDA     $07FFFE.L
-        JSR     WRITE_HEX_WORD
+        JSL     WRITE_HEX_WORD
 
         LDA     #MESSAGE_MENU.w
         LDX     #0
@@ -415,6 +420,7 @@ GOT_FLOPPY_CHECK_BOOT:
         ;       clear text mode VRAM
 
         ;       clear the entire screen
+        CLC
         JSL     TEXT_CLRBUF
         LDA     #$0000
         ACC8
@@ -455,7 +461,7 @@ BIOS_MENU_REBOOT:
         JMP     ALMOSTRESET
 
 BIOS_MENU_MONITOR:
-        JSL     $018000.L
+        JSL     MLMONITOR.L
         JMP     ALMOSTRESET
 
 CHECK_FLOPPY_DISK:
@@ -525,22 +531,45 @@ WRITE_HEX_BYTE:
         LSR     A
         LSR     A
         TAX
-        LDA     TEXT_HEXDIGITS.W,X
+        LDA     TEXT_HEXDIGITS.L,X
         JSL     TEXT_WRCHR
 
         LDA     1,S
         
         AND     #$0F
         TAX
-        LDA     TEXT_HEXDIGITS.W,X
+        LDA     TEXT_HEXDIGITS.L,X
         JSL     TEXT_WRCHR
 
         PLA
-        RTS
+        RTL
+
+WRITE_HEX_BYTE8:
+.ACCU 8
+        PHA
+        
+        AND     #$F0
+        LSR     A
+        LSR     A
+        LSR     A
+        LSR     A
+        TAX
+        LDA     TEXT_HEXDIGITS.L,X
+        JSL     TEXT_WRCHR
+
+        LDA     1,S
+        
+        AND     #$0F
+        TAX
+        LDA     TEXT_HEXDIGITS.L,X
+        JSL     TEXT_WRCHR
+
+        PLA
+        RTL
 
 WRITE_HEX_WORD:
         XBA
-        JSR     WRITE_HEX_BYTE
+        JSL     WRITE_HEX_BYTE
         XBA
         JMP     WRITE_HEX_BYTE
 

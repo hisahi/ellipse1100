@@ -56,8 +56,6 @@ INTH_BRK:                       ; BRK native handler, jump to SW handler
         PHK                     ; make sure RTI goes to INTH_RET
         PEA     INTH_RET
         PHP
-        LDA     $700002         ; load interrupt device number
-        AND     #$FF.W
         JML     SWRAMBRK-1      ; jump to trampoline
 
 INTH_NMI:                       ; NMI native handler, jump to SW handler
@@ -138,7 +136,8 @@ INTH_E_IRQ:                     ; IRQ emulation handler
 ; X = 16-bit addr to where the previous interrupt handler       B = bank
 ;                              address will be stored
 ; A, X, Y clobbered
-;       NEW INT ROUTINE MUST JMP [...] INTO WHEREVER X POINTS!!!
+;       NEW INT ROUTINE MUST JMP [...] INTO WHEREVER X POINTS, UNLESS
+;       it has no intention to return back to original code
 SWAPBRK:
         PHP                             ; save old P
         SEI                             ; disable IRQs just in case

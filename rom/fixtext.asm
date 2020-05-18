@@ -48,9 +48,9 @@
 .DEFINE TEXT_TMP41 $1026
 .DEFINE TEXT_TMP51 $1028
 ; characters
-.DEFINE TEXT_VRAM_CH $1100
+.DEFINE TEXT_VRAM_CH $4000
 ; colors
-.DEFINE TEXT_VRAM_CL $2000
+.DEFINE TEXT_VRAM_CL $4F00
 
 .MACRO ENTERTEXTRAM
         PHB
@@ -225,30 +225,35 @@ TEXT_CLEAR_BUFFER:
         PHP
         AXY16
         CLD
-        ENTERTEXTRAM
-        STZ     TEXT_TMP1.w
+        PHB
+        PEA     $0000
+        PLB
+        PLB
 ; set up DMA to clear screen
         SEI                     ; disable interrupts
-        LDX     #$0003
-        LDA     #TEXT_TMP1.w
-        STA.w   DMA0SRC         ; copy from TEXT_TMP1
-        LDA     #TEXT_VRAM_CH.w
-        STA.w   DMA0DST         ;        to TEXT_VRAM
-        LDA     #$8080.w        ; bank setup
-        STA.w   DMA0BNKS
-        LDA     #$1E00.w        ; copy total of $1E00 bytes
-        STA.w   DMA0CNT
+@ZERO   LDX     #$0003
+        LDA     #@ZERO+2.W
+        STA.w   DMA0SRC.W       ; copy from TEXT_TMP1
+        LDA     #TEXT_VRAM_CH.W
+        STA.w   DMA0DST.W       ;        to TEXT_VRAM
+        LDA     #$0180.W        ; bank setup
+        STA.w   DMA0BNKS.W
+        LDA     #$1E00.W        ; copy total of $1E00 bytes
+        STA     DMA0CNT.W
         ACC8
-        LDA     #$94.b          ; enable DMA
-        STA     DMA0CTRL        ; fixed SRC address, changing DST address
--       BIT     DMA0STAT
+        LDA     #$94.B          ; enable DMA
+        STA     DMA0CTRL.W      ; fixed SRC address, changing DST address
+-       BIT     DMA0STAT.W
         BMI     -
-        EXITTEXTRAM
+        PLB
         PLP
         RTS
 
+; clear carry only clears text buffer, set carry also updates screen
 TEXT_CLEAR_SCREEN:
-        JSR     TEXT_CLEAR_BUFFER
+        BCS     +
+        JMP     TEXT_CLEAR_BUFFER
++       JSR     TEXT_CLEAR_BUFFER
 ; clobbers A, X, Y
 TEXT_UPDATE_ENTIRE_SCREEN:
         PHP
@@ -490,12 +495,17 @@ TEXT_WRITE_SPECIAL_CHARS:
 TEXT_WRITE_CHAR_AT_CURSOR:
         PHP    
         XY16
+        PHX
+        PHY
         ACC8
-        STA     TEXT_TMP6.W
+        STA     TEXT_TMP6.L
         ENTERTEXTRAM8
         LDA     TEXT_TMP6.W
         JSR     TEXT_WRITE_STRING_CHARACTER@NOSTA
+        LDA     TEXT_TMP6.W
         EXITTEXTRAM
+        PLY
+        PLX
         PLP
         RTS
 
@@ -513,6 +523,26 @@ TEXT_UPDATE_CHAR_AT_CURSOR:
         PLX
         PLA
         PLP
+        RTS
+
+; X = new X coordinate, only replaced if value larger
+; C=1 if value was replaced
+; A, X, Y preserved
+TEXT_MOVE_CURSOR_X:
+        PHP
+        AXY16
+        PHA
+        TXA
+        CMP     TEXT_CURSORXL.L
+        BCC     +
+        STA     TEXT_CURSORXL.L
+        PLA
+        PLP
+        SEC
+        RTS
++       PLA
+        PLP
+        CLC
         RTS
 
 ; X, Y = coordinates
@@ -633,6 +663,10 @@ TEXT_FLASH_CURSOR:
         PLB
         JMP     @RET
 
+.ORG $3FDC
+TEXT_MOVE_CURSOR_X_TRAMPOLINE:
+        JSR     TEXT_MOVE_CURSOR_X.w
+        RTL
 .ORG $3FE0
 TEXT_UPDATE_CHAR_AT_CURSOR_TRAMPOLINE:
         JSR     TEXT_UPDATE_CHAR_AT_CURSOR.W

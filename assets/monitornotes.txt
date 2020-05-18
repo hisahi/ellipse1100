@@ -3,34 +3,40 @@ Monitor commands:
 <bank>   = at most 2 hex digits for length
 <number> = at most 4 hex digits for length
 <addr>   = 4 hex digits for 16-bit address, or
-           2 hex digits for bank ':' 4 hex digits for 16-bit address
+           2 hex digits for bank ':' 4 hex digits for 16-bit address, or
+           'K:' 4 hex digits for 16-bit address, or
+           'D:' 4 hex digits for 16-bit address
 <list>   = 2 hex digits for every byte, or ASCII with "..."
 <range>  = <addr> <number=length>
 
-*       M<range>            display memory bytes
-        E<addr>             enter bytes
+*       M<range>            display memory bytes (default bank: M)
+        E<addr>             enter bytes (default bank: D)
             ... <list>
-        E<addr><list>       enter bytes
-        A<addr>             assemble
-        D<addr>             disassemble
-        B<bank>             get/set bank
+        E<addr><list>       enter bytes (default bank: D)
+        A<addr>             assemble (default bank: K)
+        D<addr>             disassemble (default bank: K)
+        B                   show bank
+        BK<bank>            get/set data bank
+        BD<bank>            get/set program bank
         X<addr>             get/set address
-        G                   JSL to current bank+address
-        G<addr>             JSL to code
-        U<addr>             run code until address; replaces it with BRK
-        T                   run one instruction
-        P                   run one instruction, unless it's a JSR/JSL,
-                                in which case run it until after it returns
-        Q<addr><range>      compare byte ranges
+        G                   start/resume code
+        G<addr>             start code at (JSL) until addr
+        U<addr>             until addr1, start/resume code
+        U<addr><addr>       until addr1, start code at (JSL), addr2
+        T                   try to run "one" instruction (add breakpoint at
+                            "next" instr and run)
+        O<addr><range>      compare byte ranges
         C<addr><range>      copy to target from source
         R                   dump registers
         RA<number>          set value of A
         RX<number>          set value of X
         RY<number>          set value of Y
-        RP<bank>            set value of P
         RS<number>          set value of S
-        RB<number>          set value of B
         RD<number>          set value of D
+        RC<number>          set value of PC
+        RP<bank>            set value of P
+        RB<bank>            set value of B
+        RK<bank>            set value of K
         R1A                 make A 8-bit
         R2A                 make A 16-bit
         R1X                 make X,Y 8-bit
