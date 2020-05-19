@@ -1359,27 +1359,113 @@ MONITORASMINSTRUCTION:
         STA     MONBUF+2.B,X
         
         LDA     MONBUF.B,X
-        CMP     #4
+        CMP     #$1B
         BEQ     @NOINSTR
         CMP     #14
-        BNE     @NOTDOT
-        LDA     MONBUF+1.B,X
+        BEQ     +
+        JMP     @NOTDOT
++       LDA     MONBUF+1.B,X
+        CMP     #$11
+        BEQ     @NARROWREG
+        CMP     #$12
+        BEQ     @WIDEREG
+        AND     #$DF
         CMP     #'D'
         BNE     @ERROR
         LDA     MONBUF+2.B,X
+        AND     #$DF
         CMP     #'B'
         BEQ     @DB
         CMP     #'W'
+        BEQ     @DW
+        BRA     @ERROR
+@NARROWREG:
+        LDA     MONBUF+2.B,X
+        AND     #$DF
+        CMP     #'A'
+        BEQ     @NARROWA
+        CMP     #'X'
         BNE     @ERROR
-@DW:
-        BRA     @ERROR
-@DB:
-        BRA     @ERROR
+        LDA     MNAXYSZ.B
+        ORA     #$40
+        STA     MNAXYSZ.B
+        SEC
+        RTS
+@NARROWA:
+        LDA     MNAXYSZ.B
+        ORA     #$80
+        STA     MNAXYSZ.B
+        SEC
+        RTS
+@WIDEREG:
+        LDA     MONBUF+2.B,X
+        AND     #$DF
+        CMP     #'A'
+        BEQ     @WIDEA
+        CMP     #'X'
+        BNE     @ERROR
+        LDA     MNAXYSZ.B
+        AND     #$BF
+        STA     MNAXYSZ.B
+        SEC
+        RTS
+@WIDEA:
+        LDA     MNAXYSZ.B
+        AND     #$7F
+        STA     MNAXYSZ.B
+        SEC
+        RTS
+@DW     INX
+        INX
+        INX
+        PHX
+        JSR     MONITORASMVERIFYDW.W
+        PLX
+        BCC     @ERROR2
+@DWLOOP LDA     MONBUF.B,X
+        BEQ     @DWEND
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD16.W
+        BCC     @ERROR2
+        LDA     MONNUM1.B
+        STA     [MONADDRA.B]
+        ACC16
+        INC     MONADDRA.B
+        ACC8
+        LDA     MONNUM1+1.B
+        STA     [MONADDRA.B]
+        ACC16
+        INC     MONADDRA.B
+        ACC8
+        BRA     @DWLOOP
+@DWEND  SEC
+        RTS
+@ERROR2:
+        CLC
+        RTS
+@DB     INX
+        INX
+        INX
+        PHX
+        JSR     MONITORASMVERIFYDB.W
+        PLX
+        BCC     @ERROR2
+@DBLOOP LDA     MONBUF.B,X
+        BEQ     @DWEND
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD8.W
+        BCC     @ERROR2
+        LDA     MONNUM1.B
+        STA     [MONADDRA.B]
+        ACC16
+        INC     MONADDRA.B
+        ACC8
+        BRA     @DBLOOP
 @NOTDOT:
         CMP     #'A'
-        BCC     @ERROR
+        BCC     @ERROR2
         CMP     #'Z'+1
-        BCS     @ERROR
+        BCS     @ERROR2
         SEC
         SBC     #'A'
         ASL     A
@@ -1417,6 +1503,52 @@ MONITORASMINSTRUCTION:
 @SEARCHNOTFOUND:
         PLX
         CLC
+        RTS
+
+MONITORASMVERIFYDB:
+.ACCU 8
+        PHX
+@LOOP   JSR     MONITORSKIPSPACES
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        LDA     MONBUF.B,X
+        BEQ     @RETOK
+        JSR     MONITORREADHEX
+        BCC     @RET
+        INX
+        LDA     MONBUF.B,X
+        JSR     MONITORREADHEX
+        BCC     @RET
+        INX
+        BRA     @LOOP
+@RETOK  SEC
+@RET    PLX
+        RTS
+
+MONITORASMVERIFYDW:
+.ACCU 8
+        PHX
+@LOOP   JSR     MONITORSKIPSPACES
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        LDA     MONBUF.B,X
+        BEQ     @RETOK
+        JSR     MONITORREADHEX
+        BCC     @RET
+        INX
+        LDA     MONBUF.B,X
+        JSR     MONITORREADHEX
+        BCC     @RET
+        INX
+        LDA     MONBUF.B,X
+        JSR     MONITORREADHEX
+        BCC     @RET
+        INX
+        LDA     MONBUF.B,X
+        JSR     MONITORREADHEX
+        BCC     @RET
+        INX
+        BRA     @LOOP
+@RETOK  SEC
+@RET    PLX
         RTS
 
 MONITORROUTINES:
@@ -2492,7 +2624,7 @@ MONITOR_ASM_INSTR_BRANCH:
         JSR     MONITORREAD16.W
         BCC     @RTS
         ACC16
-@DBG    LDA     MONNUM1.B
+        LDA     MONNUM1.B
         SEC
         SBC     #2
         SEC
