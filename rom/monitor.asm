@@ -52,6 +52,7 @@
 .DEFINE MNREGPC  $26
 .DEFINE MNREGK   $28
 .DEFINE MNAXYSZ  $2A
+.DEFINE MNEMUL   $2C
 .DEFINE MONTMP1  $30
 .DEFINE MONTMP2  $32
 .DEFINE MONTMP3  $34
@@ -126,6 +127,7 @@ MLMONITOR:                      ; enter with JSL
         STA     MNREGK.B
         STA     MNREGB.B
         STA     MONSBANK.B
+        STA     MONBANKA.B
         ACC16
 
         STZ     MONSTART.B
@@ -195,7 +197,21 @@ MONCODEBRK:
         STA     MONBREAK.B
         PHA
         PLB
-        JSR     MONITORDUMPREG
+        ACC16
+        PHB
+        PEA     $0101
+        PLB
+        PLB
+        LDA     #MONITORMSGBRK.W
+        JSL     TEXT_WRSTR.L
+        PLB
+        ACC8
+        LDA     MNBPFLAG.B
+        BEQ     +
+        STZ     MNBPFLAG.B
+        LDA     MNBPINST.B
+        STA     [MNBPADDR.B]
++       JSR     MONITORDUMPREG
         JMP     MLMONITOR@LOOP
 
 MONITORDUMPREG_MSG_A:  
@@ -209,7 +225,7 @@ MONITORDUMPREG_MSG_S:
 MONITORDUMPREG_MSG_P:  
         .DB     "  P=",0
 MONITORDUMPREG_MSG_PC:  
-        .DB     " PC=",0
+        .DB     "  PC=",0
 MONITORDUMPREG_MSG_K:  
         .DB     "  K=",0
 MONITORDUMPREG_MSG_B:  
@@ -218,6 +234,8 @@ MONITORDUMPREG_MSG_D:
         .DB     "  D=",0
 MONITORDUMPREG_MSG_CR_K:  
         .DB     13,"K=",0
+MONITORDUMPREG_BRK:
+        .DB     "BRK",0
 
 MONITORREG:
         ACC8
@@ -414,6 +432,14 @@ MONITORDUMPREG:
         LDA     MONBPAGE|MNREGPC.L
         JSL     WRITE_HEX_WORD.L
         
+        LDA     MONBPAGE|MNEMUL.L
+        BNE     +
+        LDA     #' '
+        JSL     TEXT_WRCHR.L
+        BRA     ++
++       LDA     #'e'
+        JSL     TEXT_WRCHR.L
+++        
         LDA     #MONITORDUMPREG_MSG_K.W
         JSL     TEXT_WRSTR.L
         LDA     MONBPAGE|MNREGK.L
@@ -428,7 +454,15 @@ MONITORDUMPREG:
         JSL     TEXT_WRSTR.L
         LDA     MONBPAGE|MNREGD.L
         JSL     WRITE_HEX_WORD.L
-
+        
+        LDA     #' '
+        JSL     TEXT_WRCHR.L
+        JSL     TEXT_WRCHR.L
+        LDA     MONBPAGE|MONBREAK.L
+        BEQ     +
+        LDA     #MONITORDUMPREG_BRK.W
+        JSL     TEXT_WRSTR.L
++
         PLB
         RTS
 
@@ -822,7 +856,7 @@ MONITORENTER:
         ACC8
         SEC
         LDA     MONBUF.B
-        BEQ     @EXIT           ; success
+        BEQ     @EXITSAFE      ; success
         LDX     #0
         JSR     MONITORENTERVERIFY
         BCC     @SOFTERR        ; error
@@ -840,6 +874,8 @@ MONITORENTER:
         ACC16
         JSR     MONITORERROR.W
         BRA     @ENTERLOOP
+@EXITSAFE:
+        SEC
 @EXIT:
         ACC16
         LDA     MONADDR1.B
@@ -999,6 +1035,8 @@ MONITORUNTIL:
         STA     MNBPADDR+2.B
         LDA     #0
         STA     [MNBPADDR.B]
+        LDA     #$FF
+        STA     MNBPFLAG.B
         BRA     MONITORGO@NOX
 MONITORGO:
         ACC8
@@ -1033,6 +1071,7 @@ MONITORGO:
         ACC16
         TSC
         STA     MNREGS.B
+        STZ     MNEMUL.B
         ACC8
 @RESUME:
         LDA     #$5C
@@ -1052,8 +1091,17 @@ MONITORGO:
         ACC8
         LDA     MONBPAGE|MNREGP.L
         PHA
+        LDA     MONBPAGE|MNEMUL.L
+        BNE     @RESUME_E
         ACC16
         LDA     MONBPAGE|MNREGACC.L
+        PLP
+        JML     MONBPAGE|MNREGJML.L
+@RESUME_E:
+        ACC16
+        LDA     MONBPAGE|MNREGACC.L
+        SEC
+        XCE
         PLP
         JML     MONBPAGE|MNREGJML.L
 @STARTEND:
@@ -1087,6 +1135,14 @@ MONITORGO:
         STA     MNREGS.B
         STX     MNREGX.B
         STY     MNREGY.B
+        PHB
+        PEA     $0101
+        PLB
+        PLB
+        LDA     #MONITORMSGRTL.W
+        JSL     TEXT_WRSTR.L
+        PLB
+        ACC8
         JMP     MONITORDUMPREG
 
 .DEFINE DISASMINSTRS 10
@@ -1148,6 +1204,7 @@ MONITORDISASM:
         CPY     MONTMP3.B
         BCC     -
 +       LDX     #36
+        SEC
         JSL     TEXT_MVCURX.L
         PLX
         LDA     MONITORDISASMINSTR1.L,X
@@ -1207,8 +1264,163 @@ MONITORGETINSTRSIZE:
         INC     A
 +       RTS
 
+MONITORASM:
+.ACCU 8
+        ACC8
+        LDA     MONBANKA.B
+        STA     MONBANK1.B
+        LDX     #1
+        LDA     MONBUF.B,X
+        BNE     @ADDR
+        BRA     @START
+@ADDR   JSR     MONITORREADADDR.W
+        BCC     @ERROR
+        ACC16
+        LDA     MONADDR1.B
+        STA     MONADDRA.B
+        ACC8
+        LDA     MONBANK1.B
+        STA     MONBANKA.B
+        BRA     @START
+@ERROR  JMP     MONITORERROR.W
+@START:
+        LDA     MNREGP.B
+        ASL     A
+        ASL     A
+        AND     #$C0
+        STA     MNAXYSZ.B
+@ENTERLOOP:
+        ACC8
+        LDA     #13
+        JSL     TEXT_WRCHR.L
+        LDA     MONBANKA.B
+        JSL     WRITE_HEX_BYTE8.L
+        LDA     #':'
+        JSL     TEXT_WRCHR.L
+        ACC16
+        LDA     MONADDRA.B
+        JSL     WRITE_HEX_WORD.L
+        ACC8
+        LDA     #9
+        JSL     TEXT_WRCHR.L
+        JSL     TEXT_WRCHR.L
+        LDX     #36
+        SEC
+        JSL     TEXT_MVCURX.L
+        ACC16
+        LDA     #40
+        STA     MNPRPLEN.B
+        JSR     MONITORPROMPT
+        LDA     #0
+        ACC8
+        SEC
+        LDA     MONBUF.B
+        BEQ     @EXIT           ; success
+        LDX     #16
+        SEC
+        JSL     TEXT_MVCURX.L
+        JSR     MONITORASMINSTRUCTION@GO
+        BCC     @SOFTERR        ; error
+        BRA     @ENTERLOOP
+@SOFTERR:
+        ACC16
+        JSR     MONITORERROR.W
+        BRA     @ENTERLOOP
+@EXITSAFE:
+        SEC
+@EXIT:
+        ACC16
+        BCS     +
+        JMP     MONITORERROR.W
++       RTS
+
+MONITORASMINSTRUCTION:
+@NOINSTR:
+        SEC
+        RTS
+@ERROR:
+        CLC
+        RTS
+@GO:
+.ACCU 8
+        LDX     #0
+        JSR     MONITORSKIPSPACES
+        LDA     MONBUF.B,X
+        BEQ     @NOINSTR
+        AND     #$DF
+        STA     MONBUF.B,X
+        LDA     MONBUF+1.B,X
+        BEQ     @ERROR
+        AND     #$DF
+        STA     MONBUF+1.B,X
+        LDA     MONBUF+2.B,X
+        BEQ     @ERROR
+        AND     #$DF
+        STA     MONBUF+2.B,X
+        
+        LDA     MONBUF.B,X
+        CMP     #4
+        BEQ     @NOINSTR
+        CMP     #14
+        BNE     @NOTDOT
+        LDA     MONBUF+1.B,X
+        CMP     #'D'
+        BNE     @ERROR
+        LDA     MONBUF+2.B,X
+        CMP     #'B'
+        BEQ     @DB
+        CMP     #'W'
+        BNE     @ERROR
+@DW:
+        BRA     @ERROR
+@DB:
+        BRA     @ERROR
+@NOTDOT:
+        CMP     #'A'
+        BCC     @ERROR
+        CMP     #'Z'+1
+        BCS     @ERROR
+        SEC
+        SBC     #'A'
+        ASL     A
+        PHX
+        TXY
+        TAX
+        ACC16
+        LDA     MONITORASMINSTR_LETTERS.L,X
+        ACC8
+        TAX
+@SEARCHLOOP:
+        LDA     MONITORASMINSTR_START.L,X 
+        BEQ     @SEARCHNOTFOUND
+        CMP     MONPAGE|MONBUF+1.W,Y
+        BNE     @SEARCHNOTMATCH
+        LDA     MONITORASMINSTR_START+1.L,X 
+        CMP     MONPAGE|MONBUF+2.W,Y
+        BNE     @SEARCHNOTMATCH
+        ACC16
+        LDA     MONITORASMINSTR_START+2.L,X
+        STA     MONTMP4.B
+        PLX
+        ACC8
+@FOUND  INX
+        INX
+        INX
+        JSR     MONITORSKIPSPACES.W
+        JMP     (MONPAGE|MONTMP4.W)
+@SEARCHNOTMATCH:
+        INX
+        INX
+        INX
+        INX
+        BRA     @SEARCHLOOP
+@SEARCHNOTFOUND:
+        PLX
+        CLC
+        RTS
+
 MONITORROUTINES:
-        .DW     MONITORERROR                    ; A
+        .DW     MONITORASM                      ; A
         .DW     MONITORBANK                     ; B
         .DW     MONITORCOPY                     ; C
         .DW     MONITORDISASM                   ; D
@@ -1241,7 +1453,14 @@ MONITORPROMPT:
         STZ     MNLINEPS.B
         STA     MONBLINK.B
 @LOOP:
-        JSL     KEYB_UPDKEYSI.L
+        LDA     MONINNMI.B
+        BEQ     +
+        DEC     MONINNMI.B
+        JSL     KEYB_INCTIMER.L
+        LDA     MONBLINK.B
+        BEQ     +
+        JSL     TEXT_FLASHCUR.L
++       JSL     KEYB_UPDKEYSI.L
         LDA     #28
         LDX     #26
         JSL     KEYB_GETKEY.L
@@ -1337,54 +1556,12 @@ MONITORQUIT:
         PLP
         RTL
 
-MLMONBRK:
-        SETBD16 $80, MONPAGE
-        LDA     15,S
-        STX     MNREGPC.B
-        LDA     12,S
-        STA     MNREGACC.B
-        LDA     10,S
-        STA     MNREGX.B
-        LDA     8,S
-        STA     MNREGY.B
-        LDA     5,S
-        STA     MNREGD.B
-        LDA     #0
-        ACC8
-        LDA     7,S
-        STA     MNREGB.B
-        LDA     14,S
-        STA     MNREGP.B
-        LDA     17,S
-        STA     MNREGK.B
-        AXY16
-        TSC
-        CLC
-        ADC     #17
-        STA     MNREGS.B
-        TCS
-        JMP     MONCODEBRK
-
-MLMONNMI:
-        SETB16  $01
-        LDA     MONBPAGE|MONINNMI.L
-        BNE     @NMIRET
-        DEC     A
-        STA     MONBPAGE|MONINNMI.L
-        JSL     KEYB_INCTIMER
-        SETB16  $80
-        LDA     MONPAGE|MONBLINK.W
-        BEQ     +
-        JSL     TEXT_FLASHCUR
-        ACC16
-+       LDA     #0
-        STA     MONBPAGE|MONINNMI.L
-        BRA     +
-@NMIRET SETB16  $80
-+       JML     [MONPAGE|MONNMIOL.W]
-
+MONITORMSGBRK:
+        .DB     13,"## BRK",0
+MONITORMSGRTL:
+        .DB     13,"## RTL",0
 MONITORMSGERROR:
-        .DB     13,"=ERROR=",0
+        .DB     13,"## ERROR ##",0
 
 ALIGNPAGE
 
@@ -1433,6 +1610,7 @@ MONITORDISASMBYTES:                     ; $FE: 2 if XY=8b, 3 if XY=16b
         .DB     2,2,2,2,2,2,2,2,1,3,1,1,3,3,3,4
         .DB     $FE,2,2,2,2,2,2,2,1,$FF,1,1,3,3,3,4
         .DB     2,2,2,2,3,2,2,2,1,3,1,1,3,3,3,4
+
 MONITORDISASMMODES:
         .DW     MONITOR_AM_imm.W
         .DW     MONITOR_AM_idpx.W
@@ -1450,7 +1628,7 @@ MONITORDISASMMODES:
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abl.W
-        .DW     MONITOR_AM_dp.W
+        .DW     MONITOR_AM_rel8.W
         .DW     MONITOR_AM_idpy.W
         .DW     MONITOR_AM_idp.W
         .DW     MONITOR_AM_idsy.W
@@ -1482,7 +1660,7 @@ MONITORDISASMMODES:
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abl.W
-        .DW     MONITOR_AM_dp.W
+        .DW     MONITOR_AM_rel8.W
         .DW     MONITOR_AM_idpy.W
         .DW     MONITOR_AM_idp.W
         .DW     MONITOR_AM_idsy.W
@@ -1514,7 +1692,7 @@ MONITORDISASMMODES:
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abl.W
-        .DW     MONITOR_AM_dp.W
+        .DW     MONITOR_AM_rel8.W
         .DW     MONITOR_AM_idpy.W
         .DW     MONITOR_AM_idp.W
         .DW     MONITOR_AM_idsy.W
@@ -1532,7 +1710,7 @@ MONITORDISASMMODES:
         .DW     MONITOR_AM_ablx.W
         .DW     MONITOR_AM_none.W
         .DW     MONITOR_AM_idpx.W
-        .DW     MONITOR_AM_abs.W
+        .DW     MONITOR_AM_rel16.W
         .DW     MONITOR_AM_sr.W
         .DW     MONITOR_AM_dp.W
         .DW     MONITOR_AM_dp.W
@@ -1546,7 +1724,7 @@ MONITORDISASMMODES:
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abl.W
-        .DW     MONITOR_AM_dp.W
+        .DW     MONITOR_AM_rel8.W
         .DW     MONITOR_AM_idpy.W
         .DW     MONITOR_AM_idp.W
         .DW     MONITOR_AM_idsy.W
@@ -1562,9 +1740,9 @@ MONITORDISASMMODES:
         .DW     MONITOR_AM_absx.W
         .DW     MONITOR_AM_absx.W
         .DW     MONITOR_AM_ablx.W
-        .DW     MONITOR_AM_dp.W
+        .DW     MONITOR_AM_rel8.W
         .DW     MONITOR_AM_idpx.W
-        .DW     MONITOR_AM_abs.W
+        .DW     MONITOR_AM_rel16.W
         .DW     MONITOR_AM_sr.W
         .DW     MONITOR_AM_dp.W
         .DW     MONITOR_AM_dp.W
@@ -1578,7 +1756,7 @@ MONITORDISASMMODES:
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abl.W
-        .DW     MONITOR_AM_dp.W
+        .DW     MONITOR_AM_rel8.W
         .DW     MONITOR_AM_idpy.W
         .DW     MONITOR_AM_idp.W
         .DW     MONITOR_AM_idsy.W
@@ -1610,7 +1788,7 @@ MONITORDISASMMODES:
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abl.W
-        .DW     MONITOR_AM_dp.W
+        .DW     MONITOR_AM_rel8.W
         .DW     MONITOR_AM_idpy.W
         .DW     MONITOR_AM_idp.W
         .DW     MONITOR_AM_idsy.W
@@ -1642,7 +1820,7 @@ MONITORDISASMMODES:
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abl.W
-        .DW     MONITOR_AM_dp.W
+        .DW     MONITOR_AM_rel8.W
         .DW     MONITOR_AM_idpy.W
         .DW     MONITOR_AM_idp.W
         .DW     MONITOR_AM_idsy.W
@@ -1674,7 +1852,7 @@ MONITORDISASMMODES:
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abs.W
         .DW     MONITOR_AM_abl.W
-        .DW     MONITOR_AM_dp.W
+        .DW     MONITOR_AM_rel8.W
         .DW     MONITOR_AM_idpy.W
         .DW     MONITOR_AM_idp.W
         .DW     MONITOR_AM_idsy.W
@@ -1866,3 +2044,1528 @@ MONITOR_AM_idsy:
         LDA     #'Y'
         JSL     TEXT_WRCHR.L
         RTS
+MONITOR_AM_rel8:
+        LDA     #'$'
+        JSL     TEXT_WRCHR.L
+        JSR     MONITOR_AM_nextbyte.W
+        STA     MONTMP1.B
+        STZ     MONTMP1+1.B
+        BPL     +
+        DEC     MONTMP1+1.B
++       ACC16
+        LDA     MONTMP1.B
+        CLC
+        ADC     MONADDRA.B
+        JSL     WRITE_HEX_WORD.L
+        ACC8
+        RTS
+MONITOR_AM_rel16:
+        LDA     #'$'
+        JSL     TEXT_WRCHR.L
+        JSR     MONITOR_AM_nextbyte.W
+        STA     MONTMP1.B
+        JSR     MONITOR_AM_nextbyte.W
+        STA     MONTMP1+1.B
+        ACC16
+        LDA     MONTMP1.B
+        CLC
+        ADC     MONADDRA.B
+        JSL     WRITE_HEX_WORD.L
+        ACC8
+        RTS
+
+MONITORASMINSTR_LETTERS:
+        .DW MONITORASMINSTR_A-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_B-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_C-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_D-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_E-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_EMPTY-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_EMPTY-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_EMPTY-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_I-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_J-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_EMPTY-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_L-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_M-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_N-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_O-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_P-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_EMPTY-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_R-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_S-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_T-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_EMPTY-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_EMPTY-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_W-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_X-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_EMPTY-MONITORASMINSTR_START
+        .DW MONITORASMINSTR_EMPTY-MONITORASMINSTR_START
+
+MONITOR_INSTR_outbyte:
+        PHA
+        STA     [MONADDRA.B]
+        JSL     WRITE_HEX_BYTE8.L
+        LDA     #' '
+        JSL     TEXT_WRCHR.L
+        ACC16
+        INC     MONADDRA.B
+        ACC8
+        PLA
+        RTS
+
+MONITOR_ASM_SKIPDOLLAR:
+        LDA     MONBUF.B,X
+        CMP     #'$'
+        BNE     +
+        INX
++       RTS
+
+MONITOR_ASM_INSTR_STA:
+        LDA     MONBUF.B,X
+        CMP     #'#'
+        BNE     +
+        CLC
+        RTS
++       LDA     #$80
+        BRA     MONITOR_ASM_INSTR_ALU_READ.W
+MONITOR_ASM_INSTR_ORA:
+        LDA     #$00
+        BRA     MONITOR_ASM_INSTR_ALU_READ.W
+MONITOR_ASM_INSTR_AND:
+        LDA     #$20
+        BRA     MONITOR_ASM_INSTR_ALU_READ.W
+MONITOR_ASM_INSTR_EOR:
+        LDA     #$40
+        BRA     MONITOR_ASM_INSTR_ALU_READ.W
+MONITOR_ASM_INSTR_ADC:
+        LDA     #$60
+        BRA     MONITOR_ASM_INSTR_ALU_READ.W
+MONITOR_ASM_INSTR_SBC:
+        LDA     #$E0
+        BRA     MONITOR_ASM_INSTR_ALU_READ.W
+MONITOR_ASM_INSTR_CMP:
+        LDA     #$C0
+        BRA     MONITOR_ASM_INSTR_ALU_READ.W
+MONITOR_ASM_INSTR_LDA:
+        LDA     #$A0
+        ;BRA     MONITOR_ASM_INSTR_ALU_READ.W
+MONITOR_ASM_INSTR_ALU_READ:
+        STA     MONTMP1.B
+        LDA     MONBUF.B,X
+        CMP     #'#'
+        BEQ     @IMM
+        CMP     #'['
+        BEQ     @ILNG
+        CMP     #'('
+        BNE     +
+        JMP     @IND
++       JSR     MONITOR_ASM_SKIPDOLLAR.W
+        LDA     MONBUF.B+4,X
+        JSR     MONITORREADHEX.W
+        BCC     +
+        JMP     @ABSL
++       LDA     MONBUF.B+2,X
+        JSR     MONITORREADHEX.W
+        BCC     @DP
+        JMP     @ABS
+@DP     JSR     MONITORREAD8.W
+        BCC     @RTS
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @DPC
+        LDA     MONTMP1.B
+        ORA     #$05
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+@OK     SEC
+@RTS    RTS
+@DPC    CMP     #','
+        BNE     @ERR
+        LDA     MONBUF.B+1,X
+        AND     #$DF
+        CMP     #'X'
+        BNE     +
+        LDA     #$15
+        BRA     @DPCOK
++       CMP     #'S'
+        BNE     @ERR
+        LDA     #$03
+@DPCOK  ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ERR    CLC
+        RTS
+@IMM    INX
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD16LAZY.W
+        BCC     @RTS
+        LDA     MONTMP1.B
+        ORA     #$09
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        BIT     MNAXYSZ.B
+        BMI     @A8
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+@A8     SEC
+        RTS
+@ILNG   INX
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD8.W
+        BCC     @RTS
+        LDA     MONBUF.B,X
+        CMP     #']'
+        BNE     @ERR
+        INX
+        LDA     MONBUF.B,X
+        BNE     @ILNGI
+        LDA     #$07
+@ILOK   ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+@OK2    SEC
+@RTS2   RTS
+@ILNGI  CMP     #','
+        BNE     @ERR
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'Y'
+        BNE     @ERR
+        LDA     #$17
+        BRA     @ILOK
+@IND    INX
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD8.W
+        BCC     @RTS2
+        LDA     MONBUF.B,X
+        CMP     #','
+        BEQ     @INDX
+        CMP     #')'
+        BNE     @ERR2
+        LDA     MONBUF+1.B,X
+        BNE     @INDY
+        LDA     #$12
+@INDOK  ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        BRA     @OK2
+@INDX   LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'S'
+        BEQ     @INDS
+        CMP     #'X'
+        BNE     @ERR2
+        LDA     MONBUF+2.B,X
+        CMP     #')'
+        BNE     @ERR2
+        INX
+        INX
+        INX
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @ERR2
+        LDA     #$01
+        BRA     @INDOK
+@INDY   CMP     #','
+        BNE     @ERR2
+        LDA     MONBUF+2.B,X
+        AND     #$DF
+        CMP     #'Y'
+        BNE     @ERR2
+        LDA     #$11
+        BRA     @INDOK
+@INDS   LDA     MONBUF+2.B,X
+        CMP     #')'
+        BNE     @ERR2
+        LDA     MONBUF+3.B,X
+        CMP     #','
+        BNE     @ERR2
+        LDA     MONBUF+4.B,X
+        AND     #$DF
+        CMP     #'Y'
+        BNE     @ERR2
+        LDA     #$13
+        BRA     @INDOK
+@ERR2   CLC
+@RTS3   RTS
+@ABSL   JSR     MONITORREAD8.W
+        BCC     @RTS3
+        LDA     MONNUM1.B
+        STA     MONNUM2.B
+        JSR     MONITORREAD16.W
+        BCC     @RTS3
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @ABSLI
+        LDA     #$0F
+@ALOK   ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM2.B
+        JSR     MONITOR_INSTR_outbyte.W
+@OK3    SEC
+        RTS
+@ABSLI  CMP     #','
+        BNE     @ERR2
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'X'
+        BNE     @ERR2
+        LDA     #$1F
+        BRA     @ALOK
+@ABS    JSR     MONITORREAD16.W
+        BCC     @RTS3
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @ABSI
+        LDA     #$0D
+@ABOK   ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ABSI   CMP     #','
+        BNE     @ERR2
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'X'
+        BNE     +
+        LDA     #$1D
+        BRA     @ABOK
++       CMP     #'Y'
+        BNE     @ERR2
+        LDA     #$19
+        BRA     @ABOK
+
+MONITOR_ASM_INSTR_DEC:
+        LDA     MONBUF.B,X
+        BEQ     @DEC_A
+        AND     #$DF
+        CMP     #'A'
+        BNE     @DEC_NOT_A
+        LDA     MONBUF.B+1,X
+        BNE     @DEC_NOT_A
+@DEC_A:
+        LDA     #$3A
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@DEC_NOT_A:
+        LDA     #$C0
+        BRA     MONITOR_ASM_INSTR_RMW
+MONITOR_ASM_INSTR_INC:
+        LDA     MONBUF.B,X
+        BEQ     @INC_A
+        AND     #$DF
+        CMP     #'A'
+        BNE     @INC_NOT_A
+        LDA     MONBUF.B+1,X
+        BNE     @INC_NOT_A
+@INC_A:
+        LDA     #$1A
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@INC_NOT_A:
+        LDA     #$E0
+        BRA     MONITOR_ASM_INSTR_RMW
+MONITOR_ASM_INSTR_ASL:
+        LDA     #$00
+        BRA     MONITOR_ASM_INSTR_RMW
+MONITOR_ASM_INSTR_LSR:
+        LDA     #$40
+        BRA     MONITOR_ASM_INSTR_RMW
+MONITOR_ASM_INSTR_ROL:
+        LDA     #$20
+        BRA     MONITOR_ASM_INSTR_RMW
+MONITOR_ASM_INSTR_ROR:
+        LDA     #$60
+        ;BRA     MONITOR_ASM_INSTR_RMW
+MONITOR_ASM_INSTR_RMW:
+        STA     MONTMP1.B
+        LDA     MONBUF.B,X
+        BEQ     @YES_ACC
+        AND     #$DF
+        CMP     #'A'
+        BNE     @NOT_ACC
+        LDA     MONBUF+1.B,X
+        BNE     @NOT_ACC
+@YES_ACC:
+        LDA     MONTMP1.B
+        ORA     #$0A
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@NOT_ACC:
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        LDA     MONBUF.B+2,X
+        JSR     MONITORREADHEX.W
+        BCS     @ABS
+@DP     JSR     MONITORREAD8.W
+        BCC     @RTS
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @DPI
+        LDA     #$06
+@DPOK   ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+@OK     SEC
+@RTS    RTS
+@DPI    CMP     #','
+        BNE     @ERR
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'X'
+        BNE     @ERR
+        LDA     #$16
+        BRA     @DPOK
+@ERR    CLC
+        RTS
+@ABS    JSR     MONITORREAD16.W
+        BCC     @RTS
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @ABSI
+        LDA     #$0E
+@ABOK   ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ABSI   CMP     #','
+        BNE     @ERR
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'X'
+        BNE     @ERR
+        LDA     #$1E
+        BRA     @ABOK
+
+MONITOR_ASM_INSTR_BPL:
+        LDA     #$10
+        BRA     MONITOR_ASM_INSTR_BRANCH
+MONITOR_ASM_INSTR_BMI:
+        LDA     #$30
+        BRA     MONITOR_ASM_INSTR_BRANCH
+MONITOR_ASM_INSTR_BVC:
+        LDA     #$50
+        BRA     MONITOR_ASM_INSTR_BRANCH
+MONITOR_ASM_INSTR_BVS:
+        LDA     #$70
+        BRA     MONITOR_ASM_INSTR_BRANCH
+MONITOR_ASM_INSTR_BCC:
+        LDA     #$90
+        BRA     MONITOR_ASM_INSTR_BRANCH
+MONITOR_ASM_INSTR_BCS:
+        LDA     #$B0
+        BRA     MONITOR_ASM_INSTR_BRANCH
+MONITOR_ASM_INSTR_BNE:
+        LDA     #$D0
+        BRA     MONITOR_ASM_INSTR_BRANCH
+MONITOR_ASM_INSTR_BEQ:
+        LDA     #$F0
+        BRA     MONITOR_ASM_INSTR_BRANCH
+MONITOR_ASM_INSTR_BRA:
+        LDA     #$80
+MONITOR_ASM_INSTR_BRANCH:
+        STA     MONTMP1.B
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD16.W
+        BCC     @RTS
+        ACC16
+@DBG    LDA     MONNUM1.B
+        SEC
+        SBC     #2
+        SEC
+        SBC     MONADDRA.B
+        BMI     @BMI
+        CMP     #$0080
+        BCS     @ERR
+@BMIOK  ACC8
+        PHA
+        LDA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        PLA
+        JSR     MONITOR_INSTR_outbyte.W
+@OK     SEC
+@RTS    RTS
+.ACCU 16
+@BMI    CMP     #$FF80
+        BCS     @BMIOK
+.ACCU 8
+@ERR    CLC
+        RTS
+
+MONITOR_ASM_INSTR_JMP:
+        LDA     MONBUF.B,X
+        CMP     #'('
+        BEQ     @IND
+        CMP     #'['
+        BEQ     @INDL
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD16.W
+        BCC     @RTS
+        LDA     #$4C
+@JMPOK  JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+@OK     SEC
+@RTS    RTS
+@ERR    CLC
+        RTS
+@IND    INX
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD16.W
+        BCC     @RTS
+        LDA     MONBUF.B,X
+        CMP     #','
+        BEQ     @INDX
+        CMP     #')'
+        BNE     @ERR
+        LDA     #$6C
+        BRA     @JMPOK
+@INDX   LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'X'
+        BNE     @ERR
+        LDA     MONBUF+2.B,X 
+        CMP     #')'
+        BNE     @ERR
+        LDA     #$7C
+        BRA     @JMPOK
+@INDL   INX
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD16.W
+        BCC     @RTS
+        LDA     MONBUF.B,X
+        CMP     #']'
+        BNE     @ERR
+        LDA     #$DC
+        BRA     @JMPOK
+MONITOR_ASM_INSTR_JML:
+        LDA     MONBUF.B,X
+        CMP     #'['
+        BEQ     MONITOR_ASM_INSTR_JMP@INDL
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD8.W
+        BCC     @RTS
+        LDA     MONNUM1.B
+        STA     MONNUM2.B
+        JSR     MONITORREAD16.W
+        BCC     @RTS
+        LDA     #$5C
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM2.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+@RTS    RTS
+
+MONITOR_ASM_INSTR_JSR:
+        LDA     MONBUF.B,X
+        CMP     #'('
+        BEQ     @IND
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD16.W
+        BCC     @RTS
+        LDA     #$20
+@JMPOK  JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+@OK     SEC
+@RTS    RTS
+@ERR    CLC
+        RTS
+@IND    INX
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD16.W
+        BCC     @RTS
+        LDA     MONBUF.B,X
+        CMP     #','
+        BNE     @ERR
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'X'
+        BNE     @ERR
+        LDA     MONBUF+2.B,X 
+        CMP     #')'
+        BNE     @ERR
+        LDA     #$FC
+        BRA     @JMPOK
+MONITOR_ASM_INSTR_JSL:
+        LDA     MONBUF.B,X
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD8.W
+        BCC     @RTS
+        LDA     MONNUM1.B
+        STA     MONNUM2.B
+        JSR     MONITORREAD16.W
+        BCC     @RTS
+        LDA     #$22
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM2.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+@RTS    RTS
+
+MONITOR_ASM_INSTR_REP:
+        LDA     MONBUF.B,X
+        CMP     #'#'
+        BNE     @ERR
+        INX
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD8.W
+        BCC     @ERR
+        LDA     MONNUM1.B
+        ASL     A
+        ASL     A
+        EOR     #$C0
+        AND     MNAXYSZ.B
+        STA     MNAXYSZ.B
+        LDA     #$C2
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ERR    CLC
+        RTS
+
+MONITOR_ASM_INSTR_BM_READ:
+        LDA     MONBUF.B,X
+        CMP     #'#'
+        BNE     +
+        INX
++       JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JMP     MONITORREAD8.W
+
+MONITOR_ASM_INSTR_MVN:
+        JSR     MONITOR_ASM_INSTR_BM_READ
+        BCC     @ERR
+        LDA     MONBUF.B,X
+        CMP     #','
+        BNE     @ERR
+        INX
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONNUM1.B
+        STA     MONNUM2.B
+        JSR     MONITOR_ASM_INSTR_BM_READ
+        BCC     @ERR
+        LDA     #$54
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM2.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ERR    CLC
+        RTS
+
+MONITOR_ASM_INSTR_MVP:
+        JSR     MONITOR_ASM_INSTR_BM_READ
+        BCC     @ERR
+        LDA     MONBUF.B,X
+        CMP     #','
+        BNE     @ERR
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONNUM1.B
+        STA     MONNUM2.B
+        JSR     MONITOR_ASM_INSTR_BM_READ
+        BCC     @ERR
+        LDA     #$44
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM2.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ERR    CLC
+        RTS
+
+MONITOR_ASM_INSTR_BRK:
+        LDA     MONBUF.B,X
+        BEQ     @ZEROCONSTANT
+        JSR     MONITOR_ASM_INSTR_BM_READ
+        BCC     @ERR
+        LDA     #$00
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ZEROCONSTANT:
+        LDA     #$00
+        JSR     MONITOR_INSTR_outbyte.W
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ERR    CLC
+        RTS
+
+MONITOR_ASM_INSTR_COP:
+        LDA     MONBUF.B,X
+        BEQ     @ZEROCONSTANT
+        JSR     MONITOR_ASM_INSTR_BM_READ
+        BCC     @ERR
+        LDA     #$02
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ZEROCONSTANT:
+        LDA     #$02
+        JSR     MONITOR_INSTR_outbyte.W
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ERR    CLC
+        RTS
+
+MONITOR_ASM_INSTR_SEP:
+        LDA     MONBUF.B,X
+        CMP     #'#'
+        BNE     @ERR
+        INX
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD8.W
+        BCC     @ERR
+        LDA     MONNUM1.B
+        ASL     A
+        ASL     A
+        AND     #$C0
+        ORA     MNAXYSZ.B
+        STA     MNAXYSZ.B
+        LDA     #$E2
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ERR    CLC
+        RTS
+
+MONITOR_ASM_INSTR_PEA:
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD16.W
+        BCC     @ERR
+        LDA     #$F4
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ERR    CLC
+        RTS
+
+MONITOR_ASM_INSTR_PEI:
+        LDA     MONBUF.B,X
+        CMP     #'('
+        BNE     @ERR
+        INX
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD8.W
+        BCC     @ERR
+        LDA     MONBUF.B,X
+        CMP     #')'
+        BNE     @ERR
+        INX
+        LDA     #$D4
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ERR    CLC
+        RTS
+
+MONITOR_ASM_INSTR_PER:
+        LDA     #$62
+        BRA     MONITOR_ASM_INSTR_PER_BRL
+MONITOR_ASM_INSTR_BRL:
+        LDA     #$82
+MONITOR_ASM_INSTR_PER_BRL:
+        STA     MONTMP1.B
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD16.W
+        BCC     @ERR
+        ACC16
+        LDA     MONNUM1.B
+        SEC
+        SBC     #3
+        SEC
+        SBC     MONADDRA.B
+        STA     MONNUM1.B
+        ACC8
+        LDA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ERR    CLC
+        RTS
+
+MONITOR_ASM_INSTR_TRB:
+        LDA     #$10
+        STA     MONTMP1.B
+        LDA     MONBUF.B,X
+        CMP     #'#'
+        BEQ     MONITOR_ASM_INSTR_PER_BRL@ERR
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        LDA     MONBUF.B+2,X
+        JSR     MONITORREADHEX.W
+        BRA     MONITOR_ASM_INSTR_CPXY_REST
+MONITOR_ASM_INSTR_TSB:
+        LDA     #$00
+        STA     MONTMP1.B
+        LDA     MONBUF.B,X
+        CMP     #'#'
+        BEQ     MONITOR_ASM_INSTR_PER_BRL@ERR
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        LDA     MONBUF.B+2,X
+        JSR     MONITORREADHEX.W
+        BRA     MONITOR_ASM_INSTR_CPXY_REST
+MONITOR_ASM_INSTR_CPX:
+        LDA     #$E0
+        STA     MONTMP1.B
+        LDA     MONBUF.B,X
+        CMP     #'#'
+        BEQ     MONITOR_ASM_INSTR_CPY@IMM
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        LDA     MONBUF.B+2,X
+        JSR     MONITORREADHEX.W
+        BRA     MONITOR_ASM_INSTR_CPXY_REST
+MONITOR_ASM_INSTR_CPY:
+        LDA     #$C0
+        STA     MONTMP1.B
+        LDA     MONBUF.B,X
+        CMP     #'#'
+        BEQ     @IMM
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        LDA     MONBUF.B+2,X
+        JSR     MONITORREADHEX.W
+        BRA     MONITOR_ASM_INSTR_CPXY_REST
+@IMM:
+        JMP     MONITOR_ASM_INSTR_LDX@IMM
+MONITOR_ASM_INSTR_CPXY_REST:
+        BCS     @ABS
+@DP     JSR     MONITORREAD8.W
+        BCC     @RET
+        LDA     MONTMP1.B
+        ORA     #$04
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+@OK     SEC
+@RET    RTS
+@ABS    JSR     MONITORREAD16.W
+        BCC     @RET
+        LDA     MONTMP1.B
+        ORA     #$0C
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        BRA     @OK
+MONITOR_ASM_INSTR_LDX:
+        LDA     #$A2
+        STA     MONTMP1.B
+        LDA     MONBUF.B,X
+        CMP     #'#'
+        BEQ     @IMM
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        LDA     MONBUF.B+2,X
+        JSR     MONITORREADHEX.W
+        BCS     @ABS
+@DP     JSR     MONITORREAD8.W
+        BCC     @RET
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @DPI
+        LDA     #$04
+@DPOK   ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+@OK     SEC
+@RET    RTS
+@DPI    CMP     #','
+        BNE     @ERR
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'Y'
+        BNE     @ERR
+        LDA     #$14
+        BRA     @DPOK
+@ERR    CLC
+        RTS
+@ABS    JSR     MONITORREAD16.W
+        BCC     @RET
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @ABSI
+        LDA     #$0C
+@ABOK   ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        BRA     @OK
+@ABSI   CMP     #','
+        BNE     @ERR
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'Y'
+        BNE     @ERR
+        LDA     #$1C
+        BRA     @ABOK
+@IMM    INX
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        JSR     MONITORREAD16LAZY.W
+        BCC     @RTS
+        LDA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        BIT     MNAXYSZ.B
+        BVS     @X8
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+@X8     SEC
+@RTS    RTS
+MONITOR_ASM_INSTR_BIT:
+        LDA     #$20
+        STA     MONTMP1.B
+        LDA     MONBUF.B,X
+        CMP     #'#'
+        BNE     MONITOR_ASM_INSTR_LDY@NS
+@IMM    LDA     #$80
+        STA     MONTMP1.B
+        BRL     MONITOR_ASM_INSTR_ALU_READ@IMM
+MONITOR_ASM_INSTR_LDY:
+        LDA     #$A0
+        STA     MONTMP1.B
+        LDA     MONBUF.B,X
+        CMP     #'#'
+        BEQ     MONITOR_ASM_INSTR_LDX@IMM
+@NS     JSR     MONITOR_ASM_SKIPDOLLAR.W
+        LDA     MONBUF.B+2,X
+        JSR     MONITORREADHEX.W
+        BCS     @ABS
+@DP     JSR     MONITORREAD8.W
+        BCC     @RET
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @DPI
+        LDA     #$04
+@DPOK   ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+@OK     SEC
+@RET    RTS
+@DPI    CMP     #','
+        BNE     @ERR
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'X'
+        BNE     @ERR
+        LDA     #$14
+        BRA     @DPOK
+@ERR    CLC
+        RTS
+@ABS    JSR     MONITORREAD16.W
+        BCC     @RET
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @ABSI
+        LDA     #$0C
+@ABOK   ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        BRA     @OK
+@ABSI   CMP     #','
+        BNE     @ERR
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'X'
+        BNE     @ERR
+        LDA     #$1C
+        BRA     @ABOK
+
+MONITOR_ASM_INSTR_STX:
+        LDA     #$86
+        STA     MONTMP1.B
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        LDA     MONBUF.B+2,X
+        JSR     MONITORREADHEX.W
+        BCS     @ABS
+@DP     JSR     MONITORREAD8.W
+        BCC     @RET
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @DPI
+        LDA     #$04
+@DPOK   ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+@OK     SEC
+@RET    RTS
+@DPI    CMP     #','
+        BNE     @ERR
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'Y'
+        BNE     @ERR
+        LDA     #$14
+        BRA     @DPOK
+@ERR    CLC
+        RTS
+@ABS    JSR     MONITORREAD16.W
+        BCC     @RET
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @ERR
+        LDA     #$0C
+        ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        BRA     @OK
+MONITOR_ASM_INSTR_STY:
+        LDA     #$84
+        STA     MONTMP1.B
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        LDA     MONBUF.B+2,X
+        JSR     MONITORREADHEX.W
+        BCS     @ABS
+@DP     JSR     MONITORREAD8.W
+        BCC     @RET
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @DPI
+        LDA     #$04
+@DPOK   ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+@OK     SEC
+@RET    RTS
+@DPI    CMP     #','
+        BNE     @ERR
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'X'
+        BNE     @ERR
+        LDA     #$14
+        BRA     @DPOK
+@ERR    CLC
+        RTS
+@ABS    JSR     MONITORREAD16.W
+        BCC     @RET
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @ERR
+        LDA     #$0C
+        ORA     MONTMP1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        BRA     @OK
+
+MONITOR_ASM_INSTR_STZ:
+        JSR     MONITOR_ASM_SKIPDOLLAR.W
+        LDA     MONBUF.B+2,X
+        JSR     MONITORREADHEX.W
+        BCS     @ABS
+@DP     JSR     MONITORREAD8.W
+        BCC     @RET
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @DPI
+        LDA     #$64
+@DPOK   JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+@OK     SEC
+@RET    RTS
+@DPI    CMP     #','
+        BNE     @ERR
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'X'
+        BNE     @ERR
+        LDA     #$74
+        BRA     @DPOK
+@ERR    CLC
+        RTS
+@ABS    JSR     MONITORREAD16.W
+        BCC     @RET
+        JSR     MONITORSKIPSPACES.W
+        LDA     MONBUF.B,X
+        BNE     @ABSI
+        LDA     #$9C
+@ABOK   JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        LDA     MONNUM1+1.B
+        JSR     MONITOR_INSTR_outbyte.W
+        BRA     @OK
+@ABSI   CMP     #','
+        BNE     @ERR
+        LDA     MONBUF+1.B,X
+        AND     #$DF
+        CMP     #'X'
+        BNE     @ERR
+        LDA     #$9E
+        BRA     @ABOK
+
+.MACRO MONITOR_SINGLE_BYTE_INSTR
+        LDA     MONBUF.B,X
+        BNE     @ERR
+        LDA     #\1
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ERR:   CLC
+        RTS
+.ENDM
+
+MONITOR_ASM_INSTR_WDM:
+        LDA     MONBUF.B,X
+        BNE     @ERR
+        LDA     #$42
+        JSR     MONITOR_INSTR_outbyte.W
+        JSR     MONITOR_INSTR_outbyte.W
+        SEC
+        RTS
+@ERR:   CLC
+        RTS
+
+MONITOR_ASM_INSTR_DEX:
+        MONITOR_SINGLE_BYTE_INSTR $CA
+MONITOR_ASM_INSTR_DEY:
+        MONITOR_SINGLE_BYTE_INSTR $88
+MONITOR_ASM_INSTR_INX:
+        MONITOR_SINGLE_BYTE_INSTR $E8
+MONITOR_ASM_INSTR_INY:
+        MONITOR_SINGLE_BYTE_INSTR $C8
+MONITOR_ASM_INSTR_CLC:
+        MONITOR_SINGLE_BYTE_INSTR $18
+MONITOR_ASM_INSTR_CLD:
+        MONITOR_SINGLE_BYTE_INSTR $D8
+MONITOR_ASM_INSTR_CLI:
+        MONITOR_SINGLE_BYTE_INSTR $58
+MONITOR_ASM_INSTR_CLV:
+        MONITOR_SINGLE_BYTE_INSTR $B8
+MONITOR_ASM_INSTR_SEC:
+        MONITOR_SINGLE_BYTE_INSTR $38
+MONITOR_ASM_INSTR_SED:
+        MONITOR_SINGLE_BYTE_INSTR $F8
+MONITOR_ASM_INSTR_SEI:
+        MONITOR_SINGLE_BYTE_INSTR $78
+MONITOR_ASM_INSTR_PHA:
+        MONITOR_SINGLE_BYTE_INSTR $48
+MONITOR_ASM_INSTR_PHB:
+        MONITOR_SINGLE_BYTE_INSTR $8B
+MONITOR_ASM_INSTR_PHD:
+        MONITOR_SINGLE_BYTE_INSTR $0B
+MONITOR_ASM_INSTR_PHK:
+        MONITOR_SINGLE_BYTE_INSTR $4B
+MONITOR_ASM_INSTR_PHP:
+        MONITOR_SINGLE_BYTE_INSTR $08
+MONITOR_ASM_INSTR_PHX:
+        MONITOR_SINGLE_BYTE_INSTR $DA
+MONITOR_ASM_INSTR_PHY:
+        MONITOR_SINGLE_BYTE_INSTR $5A
+MONITOR_ASM_INSTR_PLA:
+        MONITOR_SINGLE_BYTE_INSTR $68
+MONITOR_ASM_INSTR_PLB:
+        MONITOR_SINGLE_BYTE_INSTR $AB
+MONITOR_ASM_INSTR_PLD:
+        MONITOR_SINGLE_BYTE_INSTR $2B
+MONITOR_ASM_INSTR_PLP:
+        MONITOR_SINGLE_BYTE_INSTR $28
+MONITOR_ASM_INSTR_PLX:
+        MONITOR_SINGLE_BYTE_INSTR $FA
+MONITOR_ASM_INSTR_PLY:
+        MONITOR_SINGLE_BYTE_INSTR $7A
+MONITOR_ASM_INSTR_TAX:
+        MONITOR_SINGLE_BYTE_INSTR $AA
+MONITOR_ASM_INSTR_TAY:
+        MONITOR_SINGLE_BYTE_INSTR $A8
+MONITOR_ASM_INSTR_TSX:
+        MONITOR_SINGLE_BYTE_INSTR $BA
+MONITOR_ASM_INSTR_TXA:
+        MONITOR_SINGLE_BYTE_INSTR $8A
+MONITOR_ASM_INSTR_TXS:
+        MONITOR_SINGLE_BYTE_INSTR $9A
+MONITOR_ASM_INSTR_TXY:
+        MONITOR_SINGLE_BYTE_INSTR $9B
+MONITOR_ASM_INSTR_TYA:
+        MONITOR_SINGLE_BYTE_INSTR $98
+MONITOR_ASM_INSTR_TYX:
+        MONITOR_SINGLE_BYTE_INSTR $BB
+MONITOR_ASM_INSTR_TCD:
+        MONITOR_SINGLE_BYTE_INSTR $5B
+MONITOR_ASM_INSTR_TCS:
+        MONITOR_SINGLE_BYTE_INSTR $1B
+MONITOR_ASM_INSTR_TDC:
+        MONITOR_SINGLE_BYTE_INSTR $7B
+MONITOR_ASM_INSTR_TSC:
+        MONITOR_SINGLE_BYTE_INSTR $3B
+MONITOR_ASM_INSTR_RTL:
+        MONITOR_SINGLE_BYTE_INSTR $6B
+MONITOR_ASM_INSTR_RTS:
+        MONITOR_SINGLE_BYTE_INSTR $60
+MONITOR_ASM_INSTR_RTI:
+        MONITOR_SINGLE_BYTE_INSTR $40
+MONITOR_ASM_INSTR_STP:
+        MONITOR_SINGLE_BYTE_INSTR $DB
+MONITOR_ASM_INSTR_WAI:
+        MONITOR_SINGLE_BYTE_INSTR $CB
+MONITOR_ASM_INSTR_XBA:
+        MONITOR_SINGLE_BYTE_INSTR $EB
+MONITOR_ASM_INSTR_XCE:
+        MONITOR_SINGLE_BYTE_INSTR $FB
+MONITOR_ASM_INSTR_NOP:
+        MONITOR_SINGLE_BYTE_INSTR $EA
+
+MONITORASMINSTR_START:
+MONITORASMINSTR_A:
+        .DB "DC"
+        .DW MONITOR_ASM_INSTR_ADC
+        .DB "ND"
+        .DW MONITOR_ASM_INSTR_AND
+        .DB "SL"
+        .DW MONITOR_ASM_INSTR_ASL
+MONITORASMINSTR_EMPTY:
+        .DB 0
+MONITORASMINSTR_B:
+        .DB "CC"
+        .DW MONITOR_ASM_INSTR_BCC
+        .DB "CS"
+        .DW MONITOR_ASM_INSTR_BCS
+        .DB "EQ"
+        .DW MONITOR_ASM_INSTR_BEQ
+        .DB "IT"
+        .DW MONITOR_ASM_INSTR_BIT
+        .DB "MI"
+        .DW MONITOR_ASM_INSTR_BMI
+        .DB "NE"
+        .DW MONITOR_ASM_INSTR_BNE
+        .DB "PL"
+        .DW MONITOR_ASM_INSTR_BPL
+        .DB "RA"
+        .DW MONITOR_ASM_INSTR_BRA
+        .DB "RK"
+        .DW MONITOR_ASM_INSTR_BRK
+        .DB "RL"
+        .DW MONITOR_ASM_INSTR_BRL
+        .DB "VC"
+        .DW MONITOR_ASM_INSTR_BVC
+        .DB "VS"
+        .DW MONITOR_ASM_INSTR_BVS
+        .DB 0
+MONITORASMINSTR_C:
+        .DB "LC"
+        .DW MONITOR_ASM_INSTR_CLC
+        .DB "LD"
+        .DW MONITOR_ASM_INSTR_CLD
+        .DB "LI"
+        .DW MONITOR_ASM_INSTR_CLI
+        .DB "LV"
+        .DW MONITOR_ASM_INSTR_CLV
+        .DB "MP"
+        .DW MONITOR_ASM_INSTR_CMP
+        .DB "OP"
+        .DW MONITOR_ASM_INSTR_COP
+        .DB "PX"
+        .DW MONITOR_ASM_INSTR_CPX
+        .DB "PY"
+        .DW MONITOR_ASM_INSTR_CPY
+        .DB 0
+MONITORASMINSTR_D:
+        .DB "EC"
+        .DW MONITOR_ASM_INSTR_DEC
+        .DB "EX"
+        .DW MONITOR_ASM_INSTR_DEX
+        .DB "EY"
+        .DW MONITOR_ASM_INSTR_DEY
+        .DB 0
+MONITORASMINSTR_E:
+        .DB "OR"
+        .DW MONITOR_ASM_INSTR_EOR
+        .DB 0
+MONITORASMINSTR_I:
+        .DB "NC"
+        .DW MONITOR_ASM_INSTR_INC
+        .DB "NX"
+        .DW MONITOR_ASM_INSTR_INX
+        .DB "NY"
+        .DW MONITOR_ASM_INSTR_INY
+        .DB 0
+MONITORASMINSTR_J:
+        .DB "ML"
+        .DW MONITOR_ASM_INSTR_JML
+        .DB "MP"
+        .DW MONITOR_ASM_INSTR_JMP
+        .DB "SL"
+        .DW MONITOR_ASM_INSTR_JSL
+        .DB "SR"
+        .DW MONITOR_ASM_INSTR_JSR
+        .DB 0
+MONITORASMINSTR_L:
+        .DB "DA"
+        .DW MONITOR_ASM_INSTR_LDA
+        .DB "DX"
+        .DW MONITOR_ASM_INSTR_LDX
+        .DB "DY"
+        .DW MONITOR_ASM_INSTR_LDY
+        .DB "SR"
+        .DW MONITOR_ASM_INSTR_LSR
+        .DB 0
+MONITORASMINSTR_M:
+        .DB "VN"
+        .DW MONITOR_ASM_INSTR_MVN
+        .DB "VP"
+        .DW MONITOR_ASM_INSTR_MVP
+        .DB 0
+MONITORASMINSTR_N:
+        .DB "OP"
+        .DW MONITOR_ASM_INSTR_NOP
+        .DB 0
+MONITORASMINSTR_O:
+        .DB "RA"
+        .DW MONITOR_ASM_INSTR_ORA
+        .DB 0
+MONITORASMINSTR_P:
+        .DB "EA"
+        .DW MONITOR_ASM_INSTR_PEA
+        .DB "EI"
+        .DW MONITOR_ASM_INSTR_PEI
+        .DB "ER"
+        .DW MONITOR_ASM_INSTR_PER
+        .DB "HA"
+        .DW MONITOR_ASM_INSTR_PHA
+        .DB "HB"
+        .DW MONITOR_ASM_INSTR_PHB
+        .DB "HD"
+        .DW MONITOR_ASM_INSTR_PHD
+        .DB "HK"
+        .DW MONITOR_ASM_INSTR_PHK
+        .DB "HP"
+        .DW MONITOR_ASM_INSTR_PHP
+        .DB "HX"
+        .DW MONITOR_ASM_INSTR_PHX
+        .DB "HY"
+        .DW MONITOR_ASM_INSTR_PHY
+        .DB "LA"
+        .DW MONITOR_ASM_INSTR_PLA
+        .DB "LB"
+        .DW MONITOR_ASM_INSTR_PLB
+        .DB "LD"
+        .DW MONITOR_ASM_INSTR_PLD
+        .DB "LP"
+        .DW MONITOR_ASM_INSTR_PLP
+        .DB "LX"
+        .DW MONITOR_ASM_INSTR_PLX
+        .DB "LY"
+        .DW MONITOR_ASM_INSTR_PLY
+        .DB 0
+MONITORASMINSTR_R:
+        .DB "EP"
+        .DW MONITOR_ASM_INSTR_REP
+        .DB "OL"
+        .DW MONITOR_ASM_INSTR_ROL
+        .DB "OR"
+        .DW MONITOR_ASM_INSTR_ROR
+        .DB "TI"
+        .DW MONITOR_ASM_INSTR_RTI
+        .DB "TL"
+        .DW MONITOR_ASM_INSTR_RTL
+        .DB "TS"
+        .DW MONITOR_ASM_INSTR_RTS
+        .DB 0
+MONITORASMINSTR_S:
+        .DB "BC"
+        .DW MONITOR_ASM_INSTR_SBC
+        .DB "EC"
+        .DW MONITOR_ASM_INSTR_SEC
+        .DB "ED"
+        .DW MONITOR_ASM_INSTR_SED
+        .DB "EI"
+        .DW MONITOR_ASM_INSTR_SEI
+        .DB "EP"
+        .DW MONITOR_ASM_INSTR_SEP
+        .DB "TA"
+        .DW MONITOR_ASM_INSTR_STA
+        .DB "TP"
+        .DW MONITOR_ASM_INSTR_STP
+        .DB "TX"
+        .DW MONITOR_ASM_INSTR_STX
+        .DB "TY"
+        .DW MONITOR_ASM_INSTR_STY
+        .DB "TZ"
+        .DW MONITOR_ASM_INSTR_STZ
+        .DB 0
+MONITORASMINSTR_T:
+        .DB "AX"
+        .DW MONITOR_ASM_INSTR_TAX
+        .DB "AY"
+        .DW MONITOR_ASM_INSTR_TAY
+        .DB "CD"
+        .DW MONITOR_ASM_INSTR_TCD
+        .DB "CS"
+        .DW MONITOR_ASM_INSTR_TCS
+        .DB "DC"
+        .DW MONITOR_ASM_INSTR_TDC
+        .DB "RB"
+        .DW MONITOR_ASM_INSTR_TRB
+        .DB "SB"
+        .DW MONITOR_ASM_INSTR_TSB
+        .DB "SC"
+        .DW MONITOR_ASM_INSTR_TSC
+        .DB "SX"
+        .DW MONITOR_ASM_INSTR_TSX
+        .DB "XA"
+        .DW MONITOR_ASM_INSTR_TXA
+        .DB "XS"
+        .DW MONITOR_ASM_INSTR_TXS
+        .DB "XY"
+        .DW MONITOR_ASM_INSTR_TXY
+        .DB "YA"
+        .DW MONITOR_ASM_INSTR_TYA
+        .DB "YX"
+        .DW MONITOR_ASM_INSTR_TYX
+        .DB 0
+MONITORASMINSTR_W:
+        .DB "AI"
+        .DW MONITOR_ASM_INSTR_WAI
+        .DB "DM"
+        .DW MONITOR_ASM_INSTR_WDM
+        .DB 0
+MONITORASMINSTR_X:
+        .DB "BA"
+        .DW MONITOR_ASM_INSTR_XBA
+        .DB "CE"
+        .DW MONITOR_ASM_INSTR_XCE
+        .DB 0
+
+MLMONBRK:
+        CLI
+        BNE     MLMONBRKE
+        SETBD16 $80, MONPAGE
+        LDA     11,S
+        SEC
+        SBC     #2
+        STA     MNREGPC.B
+        LDA     8,S
+        STA     MNREGACC.B
+        LDA     6,S
+        STA     MNREGX.B
+        LDA     4,S
+        STA     MNREGY.B
+        LDA     1,S
+        STA     MNREGD.B
+        LDA     #0
+        ACC8
+        LDA     3,S
+        STA     MNREGB.B
+        LDA     10,S
+        STA     MNREGP.B
+        LDA     13,S
+        STA     MNREGK.B
+        AXY16
+        TSC
+        CLC
+        ADC     #13
+        STA     MNREGS.B
+        TCS
+        LDA     #0
+        STA     MNEMUL.B
+        JMP     MONCODEBRK
+
+MLMONBRKE:
+        SETBD16 $80, MONPAGE
+        LDA     15,S
+        SEC
+        SBC     #2
+        STA     MNREGPC.B
+        LDA     8,S
+        STA     MNREGACC.B
+        LDA     6,S
+        STA     MNREGX.B
+        LDA     4,S
+        STA     MNREGY.B
+        LDA     1,S
+        STA     MNREGD.B
+        LDA     #0
+        ACC8
+        LDA     3,S
+        STA     MNREGB.B
+        LDA     14,S
+        STA     MNREGP.B
+        STZ     MNREGK.B
+        AXY16
+        TSC
+        CLC
+        ADC     #17
+        STA     MNREGS.B
+        TCS
+        LDA     #1
+        STA     MNEMUL.B
+        JMP     MONCODEBRK
+
+MLMONNMI:
+        ; increment NMI counter
+        SETB16  $80
+        INC     MONPAGE|MONINNMI.W
+        JML     [MONPAGE|MONNMIOL.W]

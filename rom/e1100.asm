@@ -140,25 +140,25 @@
 .ENDM
 
 .MACRO SETBD8           ; set A to 8b and copy values to B and D; clobbers A
-        ACC8
-        LDA     #\1
-        PHA
-        PLB
         ACC16
         LDA     #\2
         PHA
         PLD
+        ACC8
+        LDA     #\1
+        PHA
+        PLB
 .ENDM
 
 .MACRO SETBD16          ; set A to 16b and copy values to B and D; clobbers A
-        ACC16
-        LDA     #\2
-        PHA
-        PLD
         ACC8
         LDA     #\1
         PHA
         PLB
+        ACC16
+        LDA     #\2
+        PHA
+        PLD
 .ENDM
 
 .MACRO ALIGNPAGE        ; aligns to next page

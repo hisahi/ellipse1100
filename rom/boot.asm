@@ -45,14 +45,23 @@ ALMOSTRESET:
         PHA
         PLB                     ; B = 0
 
-        LDA     #$02.B
-        STA     VPUCNTRL.W
-
         AXY16
         LDA     #$0000
         TCD                     ; D = 0
         LDA     #$03FF
         TCS                     ; S to $03FF
+
+        ACC8
+; reset HW registers
+        STZ     EINTGNRC.W      ; disable interrupts
+        STZ     DMA0CTRL.W      ; reset DMA #0-#3
+        STZ     DMA1CTRL.W
+        STZ     DMA2CTRL.W
+        STZ     DMA3CTRL.W
+        LDA     #%01000000      ; reset floppy drives
+        STA     FLP1STAT.W
+        STA     FLP2STAT.W
+        ACC16
 
 ; copy palette to VRAM using DMA0
         LDA     #$0043          ; from bank $00 to $43
@@ -62,22 +71,18 @@ ALMOSTRESET:
         STZ     DMA0DST.W
         LDA     #(DTA_PALETTE_END - DTA_PALETTE_START)
         STA     DMA0CNT.W
+        ACC8
         LDA     #$0091          ; enable DMA & IRQ when over; we will WAI
         STA     DMA0CTRL.W
-        WAI                     ; wait until end of DMA
+-       BIT     DMA0STAT.W
+        BMI     -
 
-        ACC8
-        LDA     #BOOT_BACKGROUND_COLOR.b
-        JSR     FAST_SCREEN_FILL
-
-; disable many HW interrupts
-        STZ     EINTGNRC.W
-        LDA     #%01000000
-        STA     FLP1STAT.W
-        STA     FLP2STAT.W
+        LDA     #$02.B
+        STA     VPUCNTRL.W
+        LDA     #BOOT_BACKGROUND_COLOR.B
+        JSR     FAST_SCREEN_FILL.W
 
 ; set up interrupt trampolines
-        PHB
         LDA     #$80.B          ; RAM bank #$80
         PHA
         PLB
@@ -96,30 +101,35 @@ ALMOSTRESET:
         STZ     $FFFF&(SWRAMBRK+2).w
         STZ     $FFFF&(SWRAMNMI+2).w
         STZ     $FFFF&(SWRAMIRQ+2).w
-        ; set text mode background color foreground to $7F
-        LDA     #$7F
-        STA     $FFFF&TEXT_FGCOLOR.w
 
         AXY16
-        STZ     IN_SWAPBRK.W
-        STZ     IN_SWAPIRQ.W
-        STZ     IN_SWAPNMI.W
-        STZ     TEXT_CURSORON.W
-
-; set up interrupt trampolies to INTH_RTI (RTI in ROM)
-        LDA     #INTH_RTI.w
+; set up interrupt trampolies to INTH_RET
+        LDA     #INTH_RET.w
         STA     $FFFF&SWRAMCOP.w
         STA     $FFFF&SWRAMBRK.w
         STA     $FFFF&SWRAMNMI.w
         STA     $FFFF&SWRAMIRQ.w
 
-        PLB                     ; restore ROM bank
+        STZ     IN_SWAPBRK.W
+        STZ     IN_SWAPIRQ.W
+        STZ     IN_SWAPNMI.W
+        STZ     TEXT_CURSORON.W
 
-        STZ     FLP1SECT        ; sector, track, side all to 0
+        ACC8
+        ; set text mode background color foreground to $7F
+        LDA     #$7F
+        STA     $FFFF&TEXT_FGCOLOR.w
+
+        LDA     #$00.B
+        PHA
+        PLB                     ; B = 0
+
+        AXY16
+        STZ     FLP1SECT.W      ; sector, track, side all to 0
 
 ; copy ELLIPSE text logo to screen
         LDX     #42
-        LDA     #PIC_LOGO_START
+        LDA     #PIC_LOGO_START.w
         STA     DMA0SRC.W       ; copy from logo image in ROM
         LDY     #$3080          ; ...    to $41:3080
         STY     DMA0DST.W
@@ -197,7 +207,6 @@ ALMOSTRESET:
         LDX     #BOOT_DISK_MSG_X.w
         LDY     #1+BOOT_DISK_MSG_Y.w
         JSL     TEXT_WRSTRAT
-        PLB
 
 .IF _DEBUG != 0
         ; development build; skip waiting period
@@ -252,7 +261,7 @@ FIRSTFLOPPYCHECK:
         JSL     TEXT_WRSTRAT
 
         LDX     #96
-        LDA     #PIC_FLOPPY_START
+        LDA     #PIC_FLOPPY_START.W
         STA     DMA0SRC.W       ; copy from floppy image in ROM
         LDY     #$04DE          ; ...    to $42:04DE
         STY     DMA0DST.W
@@ -261,9 +270,12 @@ FIRSTFLOPPYCHECK:
 @FLOPPYLOOP:
         LDA     #96
         STA     DMA0CNT.W       ; copy total of 64 bytes
+        ACC8
         LDA     #$0091          ; enable DMA & IRQ when over; we will WAI
         STA     DMA0CTRL.W
-        WAI                     ; wait until end of DMA
+-       BIT     DMA0STAT.W      ; wait until end of DMA
+        BMI     -
+        ACC16
         TYA
         CLC     
         ADC     #$0200          ; make sure we start on the same X coordinate
@@ -398,16 +410,16 @@ GOT_FLOPPY_NOBOOT:
 
 GOT_FLOPPY_CHECK_BOOT:
 .ACCU 16
-        LDA     $800000
+        LDA     $800000.L
         CMP     #$4C45.W
         BNE     GOT_FLOPPY_NOBOOT
-        LDA     $800002
+        LDA     $800002.L
         CMP     #$494C.W
         BNE     GOT_FLOPPY_NOBOOT
-        LDA     $800004
+        LDA     $800004.L
         CMP     #$5350.W
         BNE     GOT_FLOPPY_NOBOOT
-        LDA     $800006
+        LDA     $800006.L
         CMP     #$4045.W
         BNE     GOT_FLOPPY_NOBOOT
 
@@ -416,13 +428,16 @@ GOT_FLOPPY_CHECK_BOOT:
         ACC8
         ;       set text mode background color to $00
         LDA     #$00
-        STA     TEXT_BGCOLOR.l
-        ;       clear text mode VRAM
+        STA     TEXT_BGCOLOR.L
+        
+        ; disable many hardware interrupts
+        STA     EINTGNRC.L
 
-        ;       clear the entire screen
+        ;       clear text mode VRAM
         CLC
         JSL     TEXT_CLRBUF
         LDA     #$0000
+        ;       clear the entire screen
         ACC8
         JSR     FAST_SCREEN_FILL
         JSL     KEYB_RESETBUF
@@ -431,13 +446,10 @@ GOT_FLOPPY_CHECK_BOOT:
         LDA     #$80
         PHA
         PLB
-        ; disable many hardware interrupts
-        STZ     EINTGNRC.W
 
         AXY16
         LDA     #$0000
-        PHA
-        PLD
+        TCD
         LDA     #$03FF.w
         TCS                     ; S to $03FF
         JML     $800008
@@ -458,10 +470,14 @@ BIOS_MENU_LOOP:
 
 BIOS_MENU_REBOOT:
         ACC8
+        CLC
+        JSL     TEXT_CLRBUF
         JMP     ALMOSTRESET
 
 BIOS_MENU_MONITOR:
         JSL     MLMONITOR.L
+        CLC
+        JSL     TEXT_CLRBUF
         JMP     ALMOSTRESET
 
 CHECK_FLOPPY_DISK:
@@ -471,13 +487,14 @@ CHECK_FLOPPY_DISK:
 
 FAST_SCREEN_FILL:               ; assumes 8-bit A, 16-bit X, Y
         ACC8
-        STA     $800000.L
+        STA     $80102A.L
         PHP
         CLD
         SEI                     ; disable interrupts
         AXY16
         LDX     #$0003
-        STZ     DMA0SRC.W       ; copy from $80:0000
+        LDA     #$102A
+        STA     DMA0SRC.W       ; copy from $80:102A
         STZ     DMA0DST.W       ;        to $40:0000
         LDY     #$8040          ; bank setup
 @FSLOOP:
@@ -547,6 +564,9 @@ WRITE_HEX_BYTE:
 WRITE_HEX_BYTE8:
 .ACCU 8
         PHA
+        XBA
+        LDA     #0
+        XBA
         
         AND     #$F0
         LSR     A

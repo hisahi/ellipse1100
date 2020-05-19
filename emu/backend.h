@@ -45,6 +45,9 @@ void emu_close_quit(void);
 // set window title
 void emu_settitle(const char* title);
 
+// center window on screen
+void emu_center_window(void);
+
 // whether we should continue running the emulator
 int emu_running(void);
 

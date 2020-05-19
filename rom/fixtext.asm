@@ -47,6 +47,8 @@
 .DEFINE TEXT_TMP31 $1024
 .DEFINE TEXT_TMP41 $1026
 .DEFINE TEXT_TMP51 $1028
+; $102A is reserved
+
 ; characters
 .DEFINE TEXT_VRAM_CH $4000
 ; colors
@@ -178,8 +180,8 @@ TEXT_DRAW_CHARACTER:
         ACC8
         LDA     ($010000|FIXFONT_START).L,X
         XBA
-        STX     $FF&TEXT_TMP8.B
-        LDA     5,S
+        PHX
+        LDA     7,S
         TAX
 .REPEAT 6 INDEX XOFF
         TXA
@@ -187,13 +189,13 @@ TEXT_DRAW_CHARACTER:
         ASL     A
         XBA
         BCC     +
-        LDA     4,S   
+        LDA     6,S   
 +       STA     $00.B,Y
 .IFLE XOFF 5
         INY
 .ENDIF
 .ENDR
-        LDX     $FF&TEXT_TMP8.B
+        PLX
         ACC16
 .IFLE YOFF 7
         INX
@@ -525,22 +527,43 @@ TEXT_UPDATE_CHAR_AT_CURSOR:
         PLP
         RTS
 
-; X = new X coordinate, only replaced if value larger
-; C=1 if value was replaced
+TEXT_UPDATE_CHAR_AT_CURSOR_RAW:
+        PHX
+        PHY
+        ENTERTEXTRAM
+        JSR     TEXT_UPDATE_CHARACTER_AT_CURSOR
+        EXITTEXTRAM
+        AXY16
+        PLY
+        PLX
+        RTS
+
+; X = new X coordinate
+; input   C=1 to always replace X, C=0 only if larger
+; output: C=1 if value was replaced, C=0 if not
 ; A, X, Y preserved
 TEXT_MOVE_CURSOR_X:
         PHP
         AXY16
         PHA
         TXA
+        BCS     +
         CMP     TEXT_CURSORXL.L
-        BCC     +
+        BCC     ++
++       PHA
+        JSR     TEXT_UPDATE_CHAR_AT_CURSOR_RAW
+        PLA
         STA     TEXT_CURSORXL.L
+        PHX
+        PHY
+        JSR     TEXT_CURSOR_UPDATE
+        PLY
+        PLX
         PLA
         PLP
         SEC
         RTS
-+       PLA
+++      PLA
         PLP
         CLC
         RTS
@@ -551,6 +574,7 @@ TEXT_MOVE_CURSOR:
         PHP
         AXY16
         PHA
+        JSR     TEXT_UPDATE_CHAR_AT_CURSOR_RAW
         TXA
         AND     #$FF
         STA     TEXT_CURSORXL.L

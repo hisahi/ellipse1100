@@ -42,6 +42,7 @@ int breakpoint_enabled = 0;
 unsigned int breakpoint_addr = 0;
 int f1wp = 0, f2wp = 0;
 int f1mount = 0, f2mount = 0;
+int doubleres = 0;
 char drive0fn[MAX_PATH_NAME + 1];
 char drive1fn[MAX_PATH_NAME + 1];
 unsigned long long total_cycles = 0;
@@ -143,6 +144,14 @@ int emulator_main()
     e1100_init(VS_NTSC);
     load_rom();
     emu_get_tick_ns();
+
+    if (doubleres)
+    {
+        int w, h;
+        vpu_get_resolution(&w, &h);
+        emu_set_window_size(w * 2, h * 2);
+        emu_center_window();
+    }
 
     if (open_terminal)
         emu_pause_debug();
@@ -253,6 +262,10 @@ int main(int argc, char** argv)
                 strncpy(drive1fn, argv[i], MAX_PATH_NAME + 1);
                 ++f2mount;
             }
+        }
+        else if (!strcmp(argv[i], "-2"))
+        {
+            ++doubleres;
         }
         else if (!strcmp(argv[i], "-h"))
         {

@@ -31,6 +31,7 @@
 .DEFINE IN_SWAPBRKL $800E80
 .DEFINE IN_SWAPIRQL $800E82
 .DEFINE IN_SWAPNMIL $800E84
+.DEFINE ISBRKEMUL $800E86
 
 INTH_RET:
         AXY16
@@ -41,55 +42,55 @@ INTH_RET:
         PLA
 INTH_RTI:
         RTI
+INTH_RET_PLA:
+        ACC16
+        PLA
+        RTI
 
 INTH_BRK:                       ; BRK native handler, jump to SW handler
-        ACC8
-        BIT     IN_SWAPBRK.W
-        BMI     INTH_RTI
-        AXY16
         CLD
+        ACC16
         PHA
+        ACC8
+        LDA     IN_SWAPBRK.W
+        BMI     INTH_RET_PLA
+        AXY16
         PHX
         PHY
         PHB
         PHD
-        PHK                     ; make sure RTI goes to INTH_RET
-        PEA     INTH_RET
-        PHP
+        ; A is zero if we were in native mode, otherwise <>0
+        LDA     ISBRKEMUL.L
         JML     SWRAMBRK-1      ; jump to trampoline
 
 INTH_NMI:                       ; NMI native handler, jump to SW handler
-        ACC8
-        BIT     IN_SWAPNMI.W
-        BMI     INTH_RTI
-        AXY16
         CLD
+        ACC16
         PHA
+        ACC8
+        LDA     IN_SWAPNMI.W
+        BMI     INTH_RET_PLA
+        AXY16
         PHX
         PHY
         PHB
         PHD
-        PHK                     ; make sure RTI goes to INTH_RET
-        PEA     INTH_RET
-        PHP
         LDA     $700002         ; load interrupt device number
         AND     #$FF.W
         JML     SWRAMNMI-1      ; jump to trampoline
 
 INTH_IRQ:                       ; IRQ native handler, jump to SW handler
-        ACC8
-        BIT     IN_SWAPIRQ.W
-        BMI     INTH_RTI
-        AXY16
         CLD
+        ACC16
         PHA
+        ACC8
+        LDA     IN_SWAPIRQ.W
+        BMI     INTH_RET_PLA
+        AXY16
         PHX
         PHY
         PHB
-        PHD     
-        PHK                     ; make sure RTI goes to INTH_RET
-        PEA     INTH_RET
-        PHP
+        PHD
         LDA     $700002         ; load interrupt device number
         AND     #$FF.W
         JML     SWRAMIRQ-1      ; jump to trampoline
@@ -107,6 +108,12 @@ INTH_E_BRK:                     ; BRK emulation handler
         PHK
         PEA     INTH_E_NMI_RET
         PHP
+        ACC8
+        PHA
+        LDA     #0
+        ADC     #0
+        STA     ISBRKEMUL.L
+        PLA
         JMP     INTH_BRK
 
 INTH_E_NMI:                     ; NMI emulation handler

@@ -104,6 +104,12 @@ void emu_settitle(const char* title)
     SDL_SetWindowTitle(window, title);
 }
 
+void emu_center_window(void)
+{
+    SDL_SetWindowPosition(window,
+                        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+}
+
 void emu_set_window_size(int w, int h)
 {
     SDL_SetWindowSize(window, w, h);

@@ -374,7 +374,10 @@ void cpu_instruction_loop(void)
         // fetch instruction
         oldS = regs.S;
         lastAddrPC = CODE_ADDR(regs.PC);
-        lastOpcode = ib = mem_read(cpu_inc_pc());
+        lastOpcode = ib = mem_read(lastAddrPC);
+        if ((reset || interrupt) && (ib == 0 || ib == 2))
+            continue;
+        cpu_inc_pc();
         END_CYCLE_NOABORT();
         // decode & execute
         (*cpu_instr_table[ib])(am = *cpu_addr_table[ib]);

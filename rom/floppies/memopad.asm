@@ -27,22 +27,21 @@
 .INCLUDE "floppyhd.asm"
 
 BEGINNING:
-        STZ     IN_NMI
+        STZ     GOTNMI.W
         CLI
         LDA     #MESSAGE
         LDX     #0
         LDY     #0
-        JSL     TEXT_WRSTRAT
+        JSL     TEXT_WRSTRAT.L
 
         LDA     #NMICHECKKEYB.W
         LDX     #OLDNMI.W
         LDY     #$0080.W
         JSL     ROM_SWAPNMI.L
         
-        LDA     #$01                    ; enable keyboard interrupt
+        ACC8                            ; enable VSYNC NMI & keyboard interrupt
         STA     IOBANK|EINTGNRC.L
 
-        ACC8                            ; enable VSYNC NMI
         LDA     IOBANK|VPUCNTRL.L
         ORA     #$04
         STA     IOBANK|VPUCNTRL.L
@@ -58,26 +57,26 @@ BEGINNING:
         BCC     +
         JSL     TEXT_WRCHR
 +       WAI
-        JMP     @LOOP
+        LDA     GOTNMI.W
+        BEQ     @LOOP
+@DBG    JSL     KEYB_INCTIMER
+        JSL     TEXT_FLASHCUR
+        ACC16
+        DEC     GOTNMI.W
+        ACC8
+        BRA     @LOOP
 
 MESSAGE:
         .DB     "MEMO PAD", 13, 0
 
-IN_NMI:
+GOTNMI:
         .DW     0
 OLDNMI:
         .DL     0
 
 NMICHECKKEYB:
-        ACC8
-        LDA     #$80
-        PHA
+        PEA     $8080
         PLB
-        ACC16
-        LDA     IN_NMI.W
-        BNE     @RET
-        DEC     IN_NMI.W
-        JSL     KEYB_INCTIMER
-        JSL     TEXT_FLASHCUR
-        STZ     IN_NMI.W
-@RET:   JML     [OLDNMI.W]
+        PLB
+        INC     GOTNMI.W
+        JML     [OLDNMI.W]
