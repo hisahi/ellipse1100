@@ -1,5 +1,5 @@
 ; Ellipse Workstation 1100 (fictitious computer)
-; Header for bootable SD (960KB) floppy
+; Ellipse DOS code (top-level)
 ; 
 ; Copyright (c) 2020 Sampo Hippeläinen (hisahi)
 ; 
@@ -26,12 +26,6 @@
 
 .INCLUDE "e1100.asm"
 
-.IFNDEF FDSECTORS
-.DEFINE FDSECTORS 12
-.ENDIF
-
-.DEFINE BANKCOUNT (FDSECTORS*5/4)
-
 .MEMORYMAP
 SLOTSIZE $10000
 DEFAULTSLOT 0
@@ -39,15 +33,13 @@ SLOT 0 $0000
 .ENDME
 
 .ROMBANKMAP
-BANKSTOTAL BANKCOUNT
+BANKSTOTAL 1
 BANKSIZE $10000
-BANKS BANKCOUNT
+BANKS 1
 .ENDRO
-
-.ACCU 16
-.INDEX 16
 
 .BANK 0 .SLOT 0
 
-.ORGA $000000           ; DATA
-        .DB     "ELLIPSE@"
+.ORGA $000000           ; DOS
+        .DB     "DOS."
+        .INCLUDE    "dos/start.asm"

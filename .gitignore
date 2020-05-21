@@ -5,6 +5,7 @@ emu/*.sh
 emu/e1100em
 emu/e1100em.exe
 rom/e1100cs
+rom/makeelfs
 *.bak
 
 # https://byuu.org/projects/libco 

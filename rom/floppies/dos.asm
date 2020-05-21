@@ -1,5 +1,5 @@
 ; Ellipse Workstation 1100 (fictitious computer)
-; Header for bootable SD (960KB) floppy
+; Ellipse DOS implementation
 ; 
 ; Copyright (c) 2020 Sampo Hippeläinen (hisahi)
 ; 
@@ -24,30 +24,15 @@
 ; Written for the WLA-DX assembler
 ;
 
-.INCLUDE "e1100.asm"
+.DEFINE FDSECTORS 16
+.INCLUDE "floppyhd.asm"
+.INCLUDE "elfs.asm"
 
-.IFNDEF FDSECTORS
-.DEFINE FDSECTORS 12
-.ENDIF
+.BASE $80
 
-.DEFINE BANKCOUNT (FDSECTORS*5/4)
-
-.MEMORYMAP
-SLOTSIZE $10000
-DEFAULTSLOT 0
-SLOT 0 $0000
-.ENDME
-
-.ROMBANKMAP
-BANKSTOTAL BANKCOUNT
-BANKSIZE $10000
-BANKS BANKCOUNT
-.ENDRO
-
-.ACCU 16
-.INDEX 16
-
-.BANK 0 .SLOT 0
-
-.ORGA $000000           ; DATA
-        .DB     "ELLIPSE@"
+.INCLUDE "dos/boot.asm"
+.ORGA $01E0                             ; Ellipse standard partitions
+        ELLIPSEPART             PART_ELFS,   $00,  0,   1, 207, FDSECTORS-1
+        ELLIPSEPARTBLANK
+        ELLIPSEPARTBLANK
+        ELLIPSEPARTBLANK

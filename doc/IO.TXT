@@ -94,7 +94,8 @@ $38     Read/Write      Video control register.
                                        1 if bitmap is at $44:0000 - $46:FFFF
                                     M: 1 if V-sync NMI is enabled.
                                     S: 1 if screen rendering,
-                                       0 if screen off.
+                                       0 if screen off (always renders
+                                       color $00 in mode 0, or black in mode 1).
                                     m: 0 for 512x384 256 colors,
                                        1 for 1024x768 4 colors (grayscale).
 $40     Read/Write      DMA channel #0 control.

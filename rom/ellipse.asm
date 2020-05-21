@@ -109,7 +109,4 @@ FIXFONT_END:
         
 .BANK 2 .SLOT 2
 
-.ORG $000000            ; ELLIPSE DOS
-
-
-
+.ORG $000000            ; 

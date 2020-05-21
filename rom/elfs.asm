@@ -1,5 +1,5 @@
 ; Ellipse Workstation 1100 (fictitious computer)
-; Header for bootable SD (960KB) floppy
+; Header for EGFS (Ellipse Grid File System) and Ellipse partition mat
 ; 
 ; Copyright (c) 2020 Sampo Hippeläinen (hisahi)
 ; 
@@ -24,30 +24,24 @@
 ; Written for the WLA-DX assembler
 ;
 
-.INCLUDE "e1100.asm"
+.DEFINE PART_RAW $01 EXPORT
+.DEFINE PART_ELFS $02 EXPORT
+.DEFINE PART_DOSINT $03 EXPORT
 
-.IFNDEF FDSECTORS
-.DEFINE FDSECTORS 12
-.ENDIF
+.MACRO ELLIPSEPART ARGS PTYPE, PFLAGS, FIRSTTRK, FIRSTSCT, LASTTRK, LASTSCT
+        .DB PTYPE
+        .DB PFLAGS
+        .DW FIRSTTRK
+        .DW LASTTRK
+        .DB FIRSTSCT
+        .DB LASTSCT
+.ENDM
 
-.DEFINE BANKCOUNT (FDSECTORS*5/4)
+.MACRO ELLIPSEPARTBLANK
+        ELLIPSEPART     0, $00, 0, 0, 0, 0
+.ENDM
 
-.MEMORYMAP
-SLOTSIZE $10000
-DEFAULTSLOT 0
-SLOT 0 $0000
-.ENDME
-
-.ROMBANKMAP
-BANKSTOTAL BANKCOUNT
-BANKSIZE $10000
-BANKS BANKCOUNT
-.ENDRO
-
-.ACCU 16
-.INDEX 16
-
-.BANK 0 .SLOT 0
-
-.ORGA $000000           ; DATA
-        .DB     "ELLIPSE@"
+.MACRO DDW
+        .DW     $FFFF&(DDW)
+        .DW     $FFFF&(DDW>>16)
+.ENDM

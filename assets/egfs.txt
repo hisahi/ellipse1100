@@ -1,0 +1,104 @@
+
+ELLIPSE GRID FILE SYSTEM (EGFS)
+
+     QPTR (4B):          $OO $TT $TT $SS     ; points to anywhere on disk
+          OO    = offset * 2
+          TT TT = track: on floppies, high byte is unused, while low byte is
+                         Sttttttt - 1 bit for side, 7 for tracks
+          SS    = sector
+
+          "INVALID" = $00 $00 $00 $00. never a valid QPTR
+
+     block 1 "FSMB" (file system master block):
+          $000:$004      'EGFS'
+          $004           -------F
+               F:             floppy drive (QPTRs have 8-bit track addresses;
+                                             high track byte is unused)
+          $005           --------
+          $006           --------
+          $007           D-------
+               D:             dirty flag. set to 1 when carrying out operation,
+                                             written back as 0.
+          $010           QPTR to root dir; basically always the second block
+          $020:$027      file system ID
+          $030:$033      total size of this file system
+          $034:$037      free space (only a hint)
+          $1A0:$1FF      FBLK for first 92 tracks
+
+     DATE:
+          $00:$01        YEAR
+          $02            MONTH     (1-12)
+          $03            DAY       (1-31)
+          $04            HOUR      (0-23)
+          $05            MINUTE    (0-59)
+          $06            SECOND    (0-59)
+          $07            SECOND/256     (may not be defined)
+
+     FBLK:
+          one byte per sector for every track for the first sector in
+               that track to be a free block.
+          at the end, a QPTR to next FBLK, or "INVALID" if none
+
+     FREE BLOCK:
+          $00            $FF
+          $01            $FE
+          $02            $00 if final free block on track, else otherwise
+          $03            next free sector on this track, undefined if $02 is 0
+
+
+     directory:
+          consists of dir entries, 32B or 64B each (see "directory entry")
+     
+     directory entry:
+          all entries:
+               $00       = type
+                    $00       = FREE_ENT
+                    $01       = DIR_ROOT
+                    $02       = FILE
+                    $03       = DIR
+                    $04       = FILE_ALLOC
+                    $05       = FILE_INNER
+               $01:$0F   = type-defined
+               $10:$13   = "DOWN"; type-defined
+               $14:$17   = "UP"; QPTR to directory containing this entry
+               $18:$1B   = "RIGHT"; QPTR to next entry in this directory
+               $1C:$1F   = "LEFT"; QPTR to previous entry in this directory
+
+          DIR:
+               $02       = directory flags #1        --------
+               $03       = directory flags #2        --------
+               $04:$0F   = filename (FILENAME.EXT). $0C always '.'
+               DOWN      = QPTR to first entry in this directory, or
+                              "INVALID" if the directory is empty.
+
+          FILE:
+               $02       = file flags #1             --------
+               $03       = file flags #2             --------
+               $04:$0F   = filename (FILENAME.EXT). $0C always '.'
+               DOWN      = FILE_INNER
+
+          FILE_INNER:
+               $02:$05   = number of blocks allocated
+               $06       = file flags #3             -------B
+                                   B = + 256 to $07
+               $07       = number of bytes in last allocated block (low byte)
+               $08:$0F   = last edit DATE
+               DOWN      = QPTR to first FILE_ALLOC or INVALID if none
+               UP        = FILE
+               $18:$1B   = QPTR of first allocated block (O = 0)
+               $1C:$1F   = QPTR of second allocated block (O = 0)
+
+               file size = $28:$2B * 512 + $2C:$2D
+
+          FILE_ALLOC:
+               $00       
+               $04:$07   = QPTR of N+1th allocated block (O = 0)
+               $08:$0B   = QPTR of N+2nd allocated block (O = 0)
+               $0C:$0F   = QPTR of N+3rd allocated block (O = 0)
+               DOWN      = QPTR of N+4th allocated block (O = 0)
+               UP        = FILE_INNER
+               RIGHT     = next FILE_ALLOC or INVALID
+               LEFT      = previous FILE_ALLOC or INVALID
+          
+          DIR_ROOT:
+               same as DIR, but "UP" points to FSMB

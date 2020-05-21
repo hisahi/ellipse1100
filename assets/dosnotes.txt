@@ -1,0 +1,275 @@
+FLOPPY:
+     512 B/sector, 12/16/20 sectors, 80 tracks, 2 sides
+               12S = 480 KB/side, 960 KB
+               16S = 640 KB/side, 1280 KB
+               20S = 800 KB/side, 1600 KB
+
+     1st sector is "floppy identification sector"
+          if bootable, 8 first bytes must be 'ELLIPSE@'
+          rest are implementation defined; entire sector loaded into memory
+               at $80:0000 and jumped into ($80:0008)
+                    guaranteed stuff:
+                         K:PC = $80:0008
+                         A, X, Y are 16-bit
+                         D = $0000
+                         B = $80
+                         S = $03FF
+                         interrupts are disabled
+                         not in emulation mode
+                         all hardware interrupts disabled
+          
+          on Ellipse standard disk:
+               last 32 bytes are partition table, entry for four partitions each
+                    $00       partition type
+                                    $00     no partition
+                                    $01     raw data
+                                    $02     E*FS
+                                    $03     Ellipse DOS internal
+                    $01       partition flags
+                                    --------
+                    $02:$03   first track (also includes platter, side, etc.)
+                                    highest bit of $03 is side
+
+                    $04:$05   last track (also includes platter, side, etc.)
+                                    highest bit of $05 is side
+                    $06       first sector
+                    $07       last sector
+
+
+ELLIPSE LINEAR FILE SYSTEM (ELFS)
+
+        some say it plagiarized from Microsoft's FAT
+
+        arranged in 1 KB (2 sector) chunks
+
+        CADDR = address to chunk; 16-bit
+
+        block 1 "FSMB" (file system master block):
+            $000:$004       'ELFS'
+            $004            --------
+            $005            --------
+            $006            --------
+            $007            D-------
+                D:              dirty flag. set to 1 when carrying out operation,
+                                                 written back as 0.
+            $008:$009       media ID
+                                $0001       Ellipse 960 KB floppy
+                                $0002       Ellipse 1280 KB floppy
+                                $0003       Ellipse 1600 KB floppy
+            $010:$011       log2(bytes per chunk); always $000A for Ellipse DOS
+                                    (and nothing else is supported by it)
+            $012:$013       maximum available chunk (N)
+            $014:$015       number of chunks per track
+            $016:$017       sectors in chunk table
+            $020:$02F       file system human-readable name
+            $030:$033       total size of the data area (hint; not to be relied on)
+                                $FFFFFFFF if unknown
+            $034:$037       free space (hint; not to be relied on)
+                                $FFFFFFFF if unknown
+            $038:$03B       first sector with data (to chunk $0001)
+                                must start with a root directory
+                                must be even!
+            $03C:$03F       size of root directory (as if file size)
+
+        chunk table         right after block 1
+            chunk   0       reserved
+            chunk [1,N[     CADDR of next chunk, or $FFFF for end
+                                                    $FFFE = bad chunk
+                                                    $0000 = free
+
+            chunk $0001 is the first chunk in the data area
+        
+        DATETIME
+            00000YYY YYYYYYMM MMDDDDDH HHHHMMMM MSSSSSSS
+
+            Y:8 = year since 1980
+            M:4 = month (1-12)
+            D:5 = day (1-31)
+            H:5 = hour (0-23)
+            M:5 = minute (0-59)
+            S:5 = second (0-59)
+
+        
+        directory entry
+            $00         attributes          Dds-----
+                                    D = deleted or free slot
+                                    d = directory
+                                    s = link
+            $01         attributes          --a--SHR
+                                    R = read-only
+                                    H = hidden
+                                    S = system; file should not be moved
+                                    a = file dirty flag "archive"
+            $02:$0B     filename
+            $0C         '.'
+            $0D:$0F     extension
+            $15:$19     last modified DATETIME
+            $1A:$1D     size in bytes
+            $1E:$1F     CADDR to first chunk
+
+ELLIPSE DOS API
+
+        all DOS calls assume/set AXY16
+
+        pathname = full path name, can be relative/absolute; wildcards ? * OK
+        xpathname = full path name, no wildcards allowed
+        dirname = directory name, no wildcards allowed
+        filename = file name, no wildcards allowed
+
+        file index block = 64 bytes
+            $00:$0F             ELFS file entry
+            $20:$2F             search string
+            $30:$3F             internal
+
+                                            A high byte
+        Terminate program                   $00
+            In:     Al=exit code
+            Out:    Guaranteed not to return to program
+        Get char from stdin w/echo          $01
+            Out:    A=character code or $FFFF for EOF
+                                        (only possible if redirected)
+        Put char to stdout                  $02
+            In:     Al=character code
+        Direct console I/O                  $06
+            ; TODO
+        Output string terminating in $00    $08
+            In:     B:X=address to string
+            Out:    X=number of characters written
+        Output string terminating in '$'    $09
+            In:     B:X=address to string
+            Out:    X=number of characters written
+        Read line of input                  $0A
+            In:     B:X=buffer
+                    Y=size of buffer
+            Out:    X=number of characters written
+        Get input status                    $0B
+            Out:    A=0 if no characters available
+                    <>0 if characters available
+        Flush stdin                         $0C
+        Flush all open files                $0D
+        Set active drive                    $0E
+            In      Al=drive number >0
+        Open file                           $0F
+            In:     B:X=address to xpathname
+                    Al=mode (1=read, 2=write, 3=read/write)
+            Out:    success C=0     X=file handle
+                    failure C=1     A=error
+        Close file                          $10
+            In:     X=file handle
+            Out:    success C=0
+                    failure C=1     A=error
+                        even if fails, handle is no longer valid
+        Find first file with matching name  $11
+            In:     B:X=pathname    B:Y=address to FIB (file index block)
+            Out:    success C=0
+                    failure C=1     
+        Find next file with matching name   $12
+            In      B:Y=address to FIB (file index block)
+            Out     success C=0
+                    failure C=1     A=error
+        Delete matching files               $13
+            In      B:X=address to pathname
+            Out     success C=0     A=number of files deleted
+                    failure C=1     A=error
+        Create or truncate file             $16
+            In      B:X=address to xpathname
+            Out     success C=0     A=file handle 
+        Rename matching file                $17
+            In      B:X=address to xpathname
+                    B:Y=address to new filename
+            Out     success C=0
+                    failure C=1     A=error
+        Get drive info                      $18
+            In      Al=drive number or $00 for current
+                    B:X=address to disk info buffer
+            Out     success C=0     
+                    failure C=1     A=error
+        Set DTA                             $1A
+            In      B:X=address to new DTA
+        Get DTA                             $1B
+            Out     X=offset
+                    Y=bank
+        Set file attributes                 $1E
+            In      B:X=address to xpathname
+            Out     success C=0     Y=attributes
+                    failure C=1     A=error
+        Get file attributes                 $1F
+            In      B:X=address to xpathname
+                    Y=attributes
+            Out     success C=0
+                    failure C=1     A=error
+        Read bytes from file                $21
+            In      X=file handle   
+                    Y=number of bytes to read
+                    stack: offset to buffer (DB = bank); not auto-popped
+            Out     success C=0     Y=number of bytes actually read
+                    failure C=1     A=error
+        Write bytes to file                 $22
+            In      X=file handle   
+                    Y=number of bytes to write
+                    stack: offset to buffer (DB = bank); not auto-popped
+            Out     success C=0     Y=number of bytes actually written
+                    failure C=1     A=error
+        Get file size in bytes              $23
+            In      X=file handle
+            Out     success C=0     A=low word      Y=high word
+                    failure C=1     A=error
+        Set file pointer position           $24
+            In      Al=$00 for start of file, $01 for relative to current,
+                       $02 for end of file
+                    X=file handle
+                    stack: new 32-bit value; is auto-popped!
+            Out     success C=0     X=new position loword       Y=hiword
+                    failure C=1     A=error
+        Set current directory               $30
+            In      B:X=address to xpathname
+            Out     success C=0
+                    failure C=1     A=error
+        Get current directory               $31
+            In      B:X=address where xpathname will be stored
+                        must have space for 256+ bytes
+        Delete directory                    $33
+            In      B:X=address to dirname
+            Out     success C=0
+                    failure C=1     A=error
+        Create directory                    $36
+            In      B:X=address to dirname
+            Out     success C=0
+                    failure C=1     A=error
+        Update file entry                   $37
+            In      X=file handle
+            Out     success C=0
+                    failure C=1     A=error
+        Launch program                      $38
+        Allocate memory                     $3A
+            In      A=bytes to allocate
+            Out     success C=0     X=offset    Y=bank
+                    failure C=1     A=error
+        Free memory allocation              $3B
+            In      X=offset    Y=bank
+            Out     success C=0
+                    failure C=1
+        Read drive FSMB                     $3C
+        Write drive FSMB                    $3D
+        Get active drive                    $3E
+            Out     A=active drive number >0
+        Get Ellipse DOS version             $3F
+            Out     A=version
+
+    Error codes
+        $00     = no or unknown error
+        $01     = invalid function code
+        $02     = invalid file handle
+        $03     = file/directory not found
+        $04     = volume not found
+        $05     = invalid path
+        $06     = drive not ready
+        $07     = too many files open
+        $08     = access denied
+        $09     = not enough memory
+        $0A     = drive full
+        $0B     = file already open
+        $0C     = file not executable
+        $0D     = no more files (from $12)
+        $0E     = invalid parameter
+        $0F     = path not found

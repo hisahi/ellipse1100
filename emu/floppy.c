@@ -191,8 +191,9 @@ static inline void floppy_read_sector(floppy_drive* drive)
 {
     memcpy(drive->buffer,
            drive->disk + drive->disk_offset, _FLOPPY_SECTOR_SIZE);
-    ++drive->sector;
-    ++drive->target_sector;
+    drive->target_sector = (drive->target_sector + 1)
+                            % floppy_sector_count(drive);
+    drive->sector = drive->target_sector;
     drive->sector_offset = 0;
 }
 
@@ -212,8 +213,8 @@ static void floppy_seek_done(floppy_drive* drive)
     switch (drive->status)
     {
     case FLOPPY_STATUS_DISK_WRITE:
-        ++drive->sector;
-        ++drive->target_sector;
+        drive->target_sector = (drive->target_sector + 1)
+                                % floppy_sector_count(drive);
     case FLOPPY_STATUS_SEEK:
         drive->status = FLOPPY_STATUS_READY;
         floppy_irq(drive);
@@ -228,6 +229,8 @@ static void floppy_seek_done(floppy_drive* drive)
         floppy_irq(drive);
         break;
     }
+    drive->sector = drive->target_sector;
+    drive->track = drive->target_track;
 }
 
 static void floppy_seek(floppy_drive* drive, int write)
@@ -290,6 +293,9 @@ inline static void floppy_seek_read(floppy_drive* drive)
 #if _FLOPPY_DEBUG
         printf("Seeking floppy drive for reading, will take %d ms\n",
                 drive->seek_time);
+        printf("seeking from T=%3d/S=%2d to T=%3d/S=%2d\n",
+                drive->track, drive->sector,
+                drive->target_track, drive->target_sector);
 #endif
 
         if (drive->seek_time == 0)

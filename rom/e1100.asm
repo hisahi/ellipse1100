@@ -160,8 +160,3 @@
         PHA
         PLD
 .ENDM
-
-.MACRO ALIGNPAGE        ; aligns to next page
-__ALIGN__PAGE\@:
-.ORG $FFFF00&($FF+__ALIGN__PAGE\@)
-.ENDM

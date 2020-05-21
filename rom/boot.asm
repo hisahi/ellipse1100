@@ -32,6 +32,7 @@
 
         SEI
         CLD
+        STZ     VPUCNTRL.W
         CLC                     ; \ enter native mode 
         XCE                     ; / starting with 8-bit A, X, Y
         AXY16
@@ -77,8 +78,6 @@ ALMOSTRESET:
 -       BIT     DMA0STAT.W
         BMI     -
 
-        LDA     #$02.B
-        STA     VPUCNTRL.W
         LDA     #BOOT_BACKGROUND_COLOR.B
         JSR     FAST_SCREEN_FILL.W
 
@@ -207,6 +206,12 @@ ALMOSTRESET:
         LDX     #BOOT_DISK_MSG_X.w
         LDY     #1+BOOT_DISK_MSG_Y.w
         JSL     TEXT_WRSTRAT
+
+        ACC8
+; turn screen on
+        LDA     #$02.B
+        STA     VPUCNTRL.W
+        ACC16
 
 .IF _DEBUG != 0
         ; development build; skip waiting period

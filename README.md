@@ -6,7 +6,7 @@ identification with actual companies (active or defunct), products, persons
 # Ellipse 1100
 ![Ellipse 1100 Banner](https://raw.githubusercontent.com/hisahi/ellipse1100/master/assets/banner.png)
 
-Some time in early 1986, a relatively obscure corporation called the
+Some time in late 1986, a relatively obscure corporation called the
 ''Ellipse Data Electronics'' released a new computer model, the 16-bit
 ''Ellipse 1100'' that many considered a continuation of their earlier 8-bit
 Ellipse 100 line, which had been a marginal market success. However, the 1100

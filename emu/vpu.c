@@ -168,7 +168,7 @@ static inline void vpu_sprite_update_collision(BYTE sc)
 void vpu_reset(void)
 {
     tick = 0;
-    screen_on = 1;
+    screen_on = 0;
     vpu_raise_nmi = 0;
 }
 
@@ -193,8 +193,15 @@ inline void vpu_cycle(void)
                 PUTPIX(0, 0, 0);
                 PUTPIX(0, 0, 0);
                 PUTPIX(0, 0, 0);
-            case MODE0:
                 PUTPIX(0, 0, 0);
+                break;
+            case MODE0:
+                h = vram[VPU_PALETTE];
+                l = vram[VPU_PALETTE + 1];
+                r = (l & 0x1F) << 3; r |= r >> 5;
+                g = ((h & 3) << 6) | ((l & 0xE0) >> 2); g |= g >> 5;
+                b = (h & 0x7C) << 1; b |= b >> 5;
+                PUTPIX(r, g, b);
             }
         }
         else
