@@ -31,10 +31,10 @@
 .DEFINE COPYRIGHT_MSG_Y 46
 
         SEI
-        CLD
-        STZ     VPUCNTRL.W
         CLC                     ; \ enter native mode 
         XCE                     ; / starting with 8-bit A, X, Y
+        CLD
+        STZ     VPUCNTRL.W
         AXY16
         JSR     CHECKSUM
 

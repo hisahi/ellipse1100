@@ -238,7 +238,8 @@ int write_elfs_fsmb(FILE* floppy)
     buf[0] = sectorsperctable & 0xFF;
     buf[1] = (sectorsperctable >> 8) & 0xFF;
     fwrite(buf, 1, 2, floppy);              /* sectors per chunk table */
-    fseek(floppy, 8, SEEK_CUR);             /* padding */
+    fwrite("\002\0", 1, 2, floppy);         /* bytes per chunk num = 2 */
+    fseek(floppy, 6, SEEK_CUR);             /* padding */
     fwrite(label, 1, 16, floppy);           /* label */
 
     /* 1 sector for FIS, 1 sector for FSMB */

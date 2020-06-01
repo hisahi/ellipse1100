@@ -50,9 +50,9 @@
 ; $102A is reserved
 
 ; characters
-.DEFINE TEXT_VRAM_CH $4000
+.DEFINE TEXT_VRAM_CH $2000
 ; colors
-.DEFINE TEXT_VRAM_CL $4F00
+.DEFINE TEXT_VRAM_CL $2F00
 
 .MACRO ENTERTEXTRAM
         PHB
@@ -441,23 +441,39 @@ TEXT_WRITE_SPECIAL_CHARS:
         JMP     TEXT_CURSOR_UPDATE
 @TAB:
         JSR     TEXT_UPDATE_CHARACTER_AT_CURSOR
-        LDA     TEXT_CURSORX.W
-        CLC
-        ADC     #8
-        AND     #$F8
-        STA     TEXT_CURSORX.W
-        JMP     TEXT_CURSOR_UPDATE
+        LDX     TEXT_CURSORX.W
+        LDY     TEXT_CURSORY.W
+        X_Y_TO_TEXT_VRAM_OFFSET
+-       ACC8
+        LDA     #$09
+        STA     TEXT_VRAM_CH.W,X
+        ACC16
+        INX
+        TXA
+        AND     #$07
+        BEQ     +
+        INC     TEXT_CURSORX.W
+        PHX
+        JSR     TEXT_CURSOR_UPDATE
+        PLX
+        BRA     -
++       JMP     TEXT_CURSOR_UPDATE
 @BKSP:
         JSR     TEXT_UPDATE_CHARACTER_AT_CURSOR
-        DEC     TEXT_CURSORX.W
+-       DEC     TEXT_CURSORX.W
         JSR     TEXT_CURSOR_UPDATE
         LDX     TEXT_CURSORX.W
         LDY     TEXT_CURSORY.W
         X_Y_TO_TEXT_VRAM_OFFSET
         ACC8
+        LDA     TEXT_VRAM_CH.W,X
         STZ     TEXT_VRAM_CH.W,X
+        CMP     #9              ; tab?
+        BEQ     +               ; backspace again
         ACC16
         JMP     TEXT_UPDATE_CHARACTER_KNOWN_OFFSET
++       ACC16
+        BRA     -
 @AUP:
         JSR     TEXT_UPDATE_CHARACTER_AT_CURSOR
         LDY     TEXT_CURSORY.W

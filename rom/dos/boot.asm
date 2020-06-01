@@ -28,6 +28,7 @@
 .DEFINE DOSBOOTTMP2 $803C02
 
 BOOTLOAD:
+        SEI
         LDA     #0
         STA     DOSBOOTTMP.L
 

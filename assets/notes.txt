@@ -1,5 +1,6 @@
 IO      0-7    SYS
-        IO      0       R       system status                          --------
+        IO      0       R       system status                          -------V
+                                    V: 1 for PAL (50 Hz), 0 for NTSC (60 Hz)
                         W       write $FF to reset device
         IO      1       R/W     stack (RAM $0000:$03FF) bits 22:15
         IO      2       R       current interrupt device (IRQ or NMI)
@@ -85,3 +86,11 @@ IO      64-127  DMA
         IO      80-95   R/W     DMA 1...
         IO      96-111  R/W     DMA 2...
         IO      112-127 R/W     DMA 3...
+
+
+TODO
+     DOS
+          open/close/read/write/seek
+          raw read/write sector
+          mkdir/rmdir/delete/rename/move
+

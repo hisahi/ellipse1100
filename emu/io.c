@@ -136,8 +136,10 @@ void io_dma_bwrite(dma_channel* c, int r, BYTE v)
             c->count = c->lcount;
             DMA_SET_COPYING(c, 1);
 #if _DMA_DEBUG
-            printf("DMA#%d got job: $%04x bytes, $%02x:%04x => $%02x:%04x\n",
-                   c->id, c->count, c->srcbnk, c->src, c->dstbnk, c->dst);
+            printf("DMA#%d got job: $%04x bytes, $%02x:%04x => $%02x:%04x"
+                   " (flags = $%02x)\n",
+                   c->id, c->count, c->srcbnk, c->src, c->dstbnk, c->dst,
+                   c->control);
 #endif
         }
         break;
@@ -217,10 +219,7 @@ BYTE io_read(ADDR p)
     }
 
     if ((p & 192) == 64)
-    {
-        p &= 63;
-        return io_dma_bread(io_dma + (p >> 4), p & 15);
-    }
+        return io_dma_bread(io_dma + ((p >> 4) & 3), p & 15);
     return (BYTE)0xFF;
 }
 
@@ -242,8 +241,5 @@ void io_write(ADDR p, BYTE v)
     }
 
     if ((p & 192) == 64)
-    {
-        p &= 63;
-        io_dma_bwrite(io_dma + (p >> 4), p & 15, v);
-    }
+        io_dma_bwrite(io_dma + ((p >> 4) & 3), p & 15, v);
 }

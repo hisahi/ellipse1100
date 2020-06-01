@@ -208,7 +208,7 @@ static inline void floppy_write_sector(floppy_drive* drive)
 static void floppy_seek_done(floppy_drive* drive)
 {
 #if _FLOPPY_DEBUG
-    printf("Floppy has finished seeking\n");
+    printf("Floppy has finished seeking (off = %d)\n", drive->disk_offset);
 #endif
     switch (drive->status)
     {

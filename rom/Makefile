@@ -27,16 +27,28 @@ floppies/memopad.obj: floppies/memopad.asm
 memopad.img: floppies/memopad.obj
 	$(LD) $(LDFLAGS) memopad.lnk $@
 
-dos/dos.obj: dos/dos.asm
-	$(AS) $(AFLAGS) -o $@ $<
-DOS.SYS: dos/dos.obj
+dos/dossys.obj: dos/*.asm
+	$(AS) $(AFLAGS) -o $@ dos/dos.asm
+DOS.SYS: dos/dossys.obj
 	$(LD) $(LDFLAGS) dossys.lnk $@
-floppies/dos.obj: floppies/dos.asm dos/*.asm
+floppies/edos.obj: floppies/dos.asm dos/*.asm
 	$(AS) $(AFLAGS) -o $@ $<
-dos.img: makeelfs DOS.SYS floppies/dos.obj floppies/dos.fs
-	$(LD) $(LDFLAGS) dos.lnk $@ && ./makeelfs dos.img floppies/dos.fs
 
-all: ellipse.rom hellow.img memopad.img dos.img
+dos/hello.obj: dos/hello.asm
+	$(AS) $(AFLAGS) -o $@ $<
+HELLO.COM: dos/hello.obj
+	$(LD) $(LDFLAGS) -b hello.lnk $@
+
+dos/console.obj: dos/console.asm
+	$(AS) $(AFLAGS) -o $@ $<
+CONSOLE.COM: dos/console.obj
+	$(LD) $(LDFLAGS) -b console.lnk $@
+
+edos.img: makeelfs DOS.SYS CONSOLE.COM HELLO.COM \
+			dos/dossys.obj floppies/edos.obj floppies/dos.fs
+	$(LD) $(LDFLAGS) edos.lnk $@ && ./makeelfs edos.img floppies/dos.fs
+
+all: ellipse.rom hellow.img memopad.img edos.img
 
 .DELETE_ON_ERROR:
 
@@ -45,4 +57,4 @@ all: ellipse.rom hellow.img memopad.img dos.img
 .PHONY: .DELETE_ON_ERROR
 
 clean:
-	rm -f *.obj *.rom *.img floppies/*.obj
+	rm -f *.obj *.rom *.img DOS.SYS CONSOLE.COM floppies/*.obj

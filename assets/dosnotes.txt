@@ -61,6 +61,8 @@ ELLIPSE LINEAR FILE SYSTEM (ELFS)
             $012:$013       maximum available chunk (N)
             $014:$015       number of chunks per track
             $016:$017       sectors in chunk table
+            $018:$019       number of bytes per chunk number (always $0002
+                                    (for Ellipse DOS; only supported value)
             $020:$02F       file system human-readable name
             $030:$033       total size of the data area (hint; not to be relied on)
                                 $FFFFFFFF if unknown
@@ -69,7 +71,6 @@ ELLIPSE LINEAR FILE SYSTEM (ELFS)
             $038:$03B       first sector with data (to chunk $0001)
                                 must start with a root directory
                                 must be even!
-            $03C:$03F       size of root directory (as if file size)
 
         chunk table         right after block 1
             chunk   0       reserved
@@ -80,7 +81,7 @@ ELLIPSE LINEAR FILE SYSTEM (ELFS)
             chunk $0001 is the first chunk in the data area
         
         DATETIME
-            00000YYY YYYYYYMM MMDDDDDH HHHHMMMM MSSSSSSS
+            000000YY YYYYYYMM MMDDDDDH HHHHMMMM MSSSSSSS
 
             Y:8 = year since 1980
             M:4 = month (1-12)
@@ -91,10 +92,9 @@ ELLIPSE LINEAR FILE SYSTEM (ELFS)
 
         
         directory entry
-            $00         attributes          Dds-----
+            $00         attributes          Dd------
                                     D = deleted or free slot
                                     d = directory
-                                    s = link
             $01         attributes          --a--SHR
                                     R = read-only
                                     H = hidden
@@ -109,15 +109,18 @@ ELLIPSE LINEAR FILE SYSTEM (ELFS)
 
 ELLIPSE DOS API
 
-        all DOS calls assume/set AXY16
+        all DOS calls assume/set AXY16 and CLD
 
-        pathname = full path name, can be relative/absolute; wildcards ? * OK
-        xpathname = full path name, no wildcards allowed
+        pathname = full path name, can be relative/absolute; no wildcards allowed
+        xpathname = full path name, same as pathname but wildcards ? * OK
         dirname = directory name, no wildcards allowed
         filename = file name, no wildcards allowed
+        
+        assume A (and P) is destroyed unless otherwise specified
+                (but X, Y, D etc. preserved)
 
         file index block = 64 bytes
-            $00:$0F             ELFS file entry
+            $00:$1F             ELFS file entry
             $20:$2F             search string
             $30:$3F             internal
 
@@ -129,28 +132,32 @@ ELLIPSE DOS API
             Out:    A=character code or $FFFF for EOF
                                         (only possible if redirected)
         Put char to stdout                  $02
-            In:     Al=character code
+            In:     Al=character code (preserved)
         Direct console I/O                  $06
             ; TODO
-        Output string terminating in $00    $08
-            In:     B:X=address to string
-            Out:    X=number of characters written
+        Get char from stdin w/o echo ^C     $07
+            Out:    A=character code or $FFFF for EOF
+                                        (only possible if redirected)
+                    ^C is not handled like for $08
+        Get char from stdin w/o echo        $08
+            Out:    A=character code or $FFFF for EOF
+                                        (only possible if redirected)
         Output string terminating in '$'    $09
             In:     B:X=address to string
-            Out:    X=number of characters written
+            Out:    X=nest address to read (new X - old X = chars written)
         Read line of input                  $0A
             In:     B:X=buffer
-                    Y=size of buffer
-            Out:    X=number of characters written
+                    Y=size of buffer (not incl. null character)
+            Out:    Y=number of characters read to buffer
         Get input status                    $0B
             Out:    A=0 if no characters available
                     <>0 if characters available
         Flush stdin                         $0C
         Flush all open files                $0D
         Set active drive                    $0E
-            In      Al=drive number >0
+            In      Al=drive number >0 (preserved)
         Open file                           $0F
-            In:     B:X=address to xpathname
+            In:     B:X=address to pathname 
                     Al=mode (1=read, 2=write, 3=read/write)
             Out:    success C=0     X=file handle
                     failure C=1     A=error
@@ -160,22 +167,29 @@ ELLIPSE DOS API
                     failure C=1     A=error
                         even if fails, handle is no longer valid
         Find first file with matching name  $11
-            In:     B:X=pathname    B:Y=address to FIB (file index block)
+            In:     B:X=xpathname   B:Y=address to FIB (file index block)
+                    Al=attribute mask; 0 = normal files only
+                                        D----SHR    D=directory
+                                                    S=system
+                                                    H=hidden
+                                                    R=read-only
             Out:    success C=0
-                    failure C=1     
+                    failure C=1     A=error
         Find next file with matching name   $12
             In      B:Y=address to FIB (file index block)
             Out     success C=0
                     failure C=1     A=error
-        Delete matching files               $13
-            In      B:X=address to pathname
+        Delete file                         $13
+            In      B:X=address to pathname 
             Out     success C=0     A=number of files deleted
                     failure C=1     A=error
         Create or truncate file             $16
-            In      B:X=address to xpathname
+            In      B:X=address to pathname 
+                    Y(low)=attributes
+                    Al=mode (1=read, 2=write, 3=read/write)
             Out     success C=0     A=file handle 
         Rename matching file                $17
-            In      B:X=address to xpathname
+            In      B:X=address to pathname 
                     B:Y=address to new filename
             Out     success C=0
                     failure C=1     A=error
@@ -184,31 +198,35 @@ ELLIPSE DOS API
                     B:X=address to disk info buffer
             Out     success C=0     
                     failure C=1     A=error
+        Output string terminating in $00    $19
+            In:     B:X=address to string
+            Out:    X=nest address to read (new X - old X = chars written)
         Set DTA                             $1A
             In      B:X=address to new DTA
         Get DTA                             $1B
             Out     X=offset
                     Y=bank
         Set file attributes                 $1E
-            In      B:X=address to xpathname
+            In      B:X=address to pathname 
             Out     success C=0     Y=attributes
                     failure C=1     A=error
         Get file attributes                 $1F
-            In      B:X=address to xpathname
+            In      B:X=address to pathname 
                     Y=attributes
             Out     success C=0
                     failure C=1     A=error
         Read bytes from file                $21
             In      X=file handle   
                     Y=number of bytes to read
-                    stack: offset to buffer (DB = bank); not auto-popped
+                    D=offset to buffer (DB = bank)
             Out     success C=0     Y=number of bytes actually read
                     failure C=1     A=error
         Write bytes to file                 $22
             In      X=file handle   
                     Y=number of bytes to write
-                    stack: offset to buffer (DB = bank); not auto-popped
+                    D=offset to buffer (DB = bank)
             Out     success C=0     Y=number of bytes actually written
+                                    D=unchanged
                     failure C=1     A=error
         Get file size in bytes              $23
             In      X=file handle
@@ -218,29 +236,76 @@ ELLIPSE DOS API
             In      Al=$00 for start of file, $01 for relative to current,
                        $02 for end of file
                     X=file handle
-                    stack: new 32-bit value; is auto-popped!
+                    Y=high word of new 32-bit value
+                    D=low word of new 32-bit value
             Out     success C=0     X=new position loword       Y=hiword
+                                    D=unchanged
                     failure C=1     A=error
+        Truncate file at pointer            $25
+            In      X=file handle   
+            Out     success C=0
+                    failure C=1     A=error
+        Get system date                     $2A
+            Out     Al=day (1-31)   Ah=day of week
+                    X=month (1-12)
+                    Y=year
+        Set system date                     $2B
+            In      Al=day (1-31)
+                    X=month (1-12)
+                    Y=year
+            Out     success C=0
+                    failure C=1     (invalid date)
+        Get system time                     $2C
+            Out     Al=hour
+                    X=minute
+                    Y=second
+        Set system time                     $2D
+            In      Al=hour
+                    X=minute
+                    Y=second
+            Out     success C=0
+                    failure C=1     (invalid time)
         Set current directory               $30
-            In      B:X=address to xpathname
+            In      B:X=address to pathname 
             Out     success C=0
                     failure C=1     A=error
         Get current directory               $31
-            In      B:X=address where xpathname will be stored
-                        must have space for 256+ bytes
+            In      Al=drive number, or 0 for current
+                    B:X=address where pathname will be stored
+                        must have space for 128 bytes
+                        root directory is empty string (no leading backslash
+                                                        or drive designator)
+                        trailing backslash not included
+        Update file entry                   $32
+            In      X=file handle
+            Out     success C=0
+                    failure C=1     A=error
         Delete directory                    $33
             In      B:X=address to dirname
             Out     success C=0
                     failure C=1     A=error
         Create directory                    $36
             In      B:X=address to dirname
+                    Y(low)=attributes
             Out     success C=0
                     failure C=1     A=error
-        Update file entry                   $37
-            In      X=file handle
+        Move file entry                     $37
+            In      B:X=address to pathname 
+                    B:Y=address to dirname
             Out     success C=0
                     failure C=1     A=error
         Launch program                      $38
+            In      B:X=address to executable
+                    B:Y=address to exec structure
+                            $0000   address to command line (B is bank)
+                            $0002   (long) address to environment block
+                                        (0 to inherit; K *must* be the one
+                                         with the exec memory header)
+            Out     success C=0     file was executed
+                            X,Y clobbered on launch
+                    failure C=1     file was not executed. A=error
+        Get exit code                       $39
+            Out     A=exit code
         Allocate memory                     $3A
             In      A=bytes to allocate
             Out     success C=0     X=offset    Y=bank
@@ -273,3 +338,68 @@ ELLIPSE DOS API
         $0D     = no more files (from $12)
         $0E     = invalid parameter
         $0F     = path not found
+        $10     = DOS busy
+        $11     = invalid drive
+        $12     = general I/O failure
+        $13     = read failure
+        $14     = write failure
+        $15     = executable too large
+        $16     = cannot seek
+
+    DOS executable memory header
+        $00:01      Ellipse DOS version
+        $04:06      stack pointer/bank to return to
+        $07:09      address to environment data
+        $0E:0F      job (process) ID
+        $20:3F      local process file list (16-bit pointers to DOS RAM)
+        $78:7F      temporary trampoline
+        $80         length of command line
+        $81:FF      command line
+
+    DOS file table entry (in DOS data bank; size = $0030)
+        $00:01      file attributes     (Deleted bit = free file slot)
+        $02:0F      file name
+        $10:11      directory chunk
+        $12:13      directory entry offset
+        $14:17      current offset (also offset into chunk)
+        $18:19      current chunk
+        $1A:1D      total size
+        $1E:1F      first chunk
+        $20         drive number
+        $21         current file cache
+        $22:23      job (process) ID
+        $24         file mode
+        $2E:2F      last chunk
+
+    DOS file index block
+        $00:1F      file/directory entry
+        $20:2F      internal
+        $30:3F      file search string
+
+
+CONSOLE.COM internal commands
+        CHDIR/CD
+        CLS
+        COPY
+        DEL/ERASE
+        DIR
+        ECHO
+        FOR
+        GOTO
+        IF
+        MKDIR/MD
+        MOVE
+        PATH
+        PAUSE
+        REM
+        RENAME/REN
+        RMDIR/RM
+        SET
+        SHIFT
+        TYPE
+        VER
+        VERIFY(?)
+        VOL
+        
+        MONITOR(?)
+        PROMPT(?)
