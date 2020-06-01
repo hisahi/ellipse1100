@@ -78,24 +78,26 @@ DOSPACKFIS:
         LDA     DOSBANKD|DOSSTRINGCACHE+OFF*2.L,X
         STA     $0030+OFF*2,Y
 .ENDR
+        ; TODO: zero out remaining parts of buffer
         PHY
         PHX
-        LDX     DOSNEXTFILEOFF.B
-        LDY     #0
+        LDA     DOSLD|DOSNEXTFILEOFF.L
+        TAX
 -       LDA     DOSBANKD|DIRCHUNKCACHE.L,X
         STA     $0000,Y
         INX
         INX
         INY
         INY
-        CPY     #32
-        BCC     -
+        TXA
+        AND     #$1F
+        BNE     -
         PLX
-        LDA     DOSBANKD|DOSPAGE|DOSNEXTFILEDIR.L
-        STA     $0020,Y
-        LDA     DOSBANKD|DOSPAGE|DOSNEXTFILEOFF.L
-        STA     $0022,Y
         PLY
+        LDA     DOSLD|DOSNEXTFILEDIR.L
+        STA     $0020,Y
+        LDA     DOSLD|DOSNEXTFILEOFF.L
+        STA     $0022,Y
         RTS
 
 DOSUNPACKFIS:

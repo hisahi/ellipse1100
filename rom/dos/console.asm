@@ -180,12 +180,12 @@ CMDVALIDFN:
 @ENDFNZ
         LDA     #0
         STA     NAMEBUF.W,Y
-        STX     EXECTMP.W
         LDA     CONBUF.W,X
         CMP     #' '
         BNE     +
         INX
-+       ACC16
++       STX     EXECTMP.W
+        ACC16
         CLC
         RTS
 .ACCU 8
@@ -500,6 +500,7 @@ CMDSEEKRUN:
         LDA     FISBUF+$0C.W
         CMP     #$432E                  ; '.C'
         BNE     +
+        LDA     FISBUF+$0E.W
         CMP     #$4D4F                  ; 'OM'
         BNE     +
         JMP     CMDFISEXECCOM
@@ -521,10 +522,9 @@ CMDFISCOPYFN:
         LDX     #0
         LDY     #0
 @LOOP
-        CPX     #$0D
+        CPX     #$0E
         BCS     @EXIT
-        BRA     @LOOP
-        LDA     FISBUF+$02.W
+        LDA     FISBUF+$02.W,X
         CMP     #' '
         BEQ     @PAD
         STA     NAMEBUF.W,Y

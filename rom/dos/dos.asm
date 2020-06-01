@@ -74,7 +74,7 @@ BANKS 1
                                 ;       file handle code
 .DEFINE DOSTMP3         $04     ; used for file & path resolving,
                                 ;       file handle code
-.DEFINE DOSTMP4         $06     ; used for path resolving & file handle code
+.DEFINE DOSTMP4         $06     ; used for path resolving, file handle code
 .DEFINE DOSTMP5         $08     ; used in wildcards, paths, file execution
 .DEFINE DOSTMP6         $0A     ; used in wildcard file matching, file exec,
                                 ;       chunk allocation

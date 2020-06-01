@@ -27,10 +27,33 @@
 .INCLUDE "doscomhd.asm"
 
 BEGINNING:
+        ACC8
+        LDA     $0080.W
+        BNE     @NAME
+@WORLD:
+        ACC16
         LDA     #$0900
         LDX     #MSG
         DOSCALL
         LDA     #$0000
         DOSCALL
+@NAME:
+        ACC16
+        LDA     #$0900
+        LDX     #MSG1
+        DOSCALL
+        LDA     #$1900
+        LDX     #$0081 ; command line
+        DOSCALL
+        LDA     #$0900
+        LDX     #MSG2
+        DOSCALL
+        LDA     #$0000
+        DOSCALL
+
 MSG:
         .DB     "Hello, World!", 13, "$"
+MSG1:
+        .DB     "Hello, $"
+MSG2:
+        .DB     "!", 13, "$"

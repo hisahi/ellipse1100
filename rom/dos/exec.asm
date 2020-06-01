@@ -137,7 +137,8 @@ DOSLAUNCH:              ; $38 = launch program
         BCC     -
         LDA     #0
         STA     [DOSTMP6.B],Y
-+       ACC16
++       ; store length of command line
+        ACC16
         DEC     DOSTMP6.B
         ACC8
         TYA
@@ -182,6 +183,8 @@ DOSLAUNCH:              ; $38 = launch program
         STA     [DOSTMP6.B],Y
 +++     ACC16
         PLB
+        
+        ; stack: ORIG_ADDR(24), DOSCALLEXIT(16), X, Y, B, D
 
         ; initialize local process file list
         LDA     #$0020
@@ -219,10 +222,18 @@ DOSLAUNCH:              ; $38 = launch program
         LDA     IOBANK|ESTKBANK.L
         LDY     #$06
         STA     [DOSTMP6.B],Y
-        ACC16
 
-        PLX
-        PLX
+        ; discard old X, Y from stack
+        PLX     ; D
+        PLA     ; B
+        PLY     ; wasted
+        PLY     ; wasted
+        PHA     ; B
+        PHX     ; D
+        
+        ; stack: ORIG_ADDR(24), DOSCALLEXIT(16), B, D
+
+        ACC16
 
         TSC
         LDY     #$04
@@ -254,6 +265,7 @@ DOSLAUNCH:              ; $38 = launch program
         PHA     ; store bank since we need it later
         PHA
         PLB
+        ; stack: ORIG_ADDR(24), DOSCALLEXIT(16), B, D, B
         AXY16
         LDA     #0
         TCD

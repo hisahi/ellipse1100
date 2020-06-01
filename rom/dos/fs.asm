@@ -709,6 +709,7 @@ DOSCMPFILENAMEWC:
         ACC16
         LDA     #0
         RTS
+.ACCU 8
 @XM:
         LDA     DIRCHUNKCACHE.W,Y
         BEQ     @COMPDIFF
@@ -741,7 +742,7 @@ DOSCMPFILENAMESTAR:
         ACC8
 -       INX
         LDA     DOSSTRINGCACHE.W,X
-        BEQ     -
+        BNE     -
         DEX
 -       TYA
         AND     #$1F
@@ -786,6 +787,7 @@ DOSCMPFILENAMESTAR:
         PLY                             ; beginning of matchable area
         STY     DOSTMP8.B
         PLX                             ; after first asterisk
+        DEX
 @STARSEGLOOP:
         INX
         STX     DOSTMP7.B
@@ -1239,7 +1241,6 @@ DOSRESOLVENEXTFILE:
         STA     DOSNEXTFILEOFF.B
         LDA     DOSCACHEDDIRCH.B
         STA     DOSNEXTFILEDIR.B
-        PLX
         CLC
         RTS
 @NOTF   LDA     #DOS_ERR_FILE_NOT_FOUND
