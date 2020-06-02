@@ -27,28 +27,28 @@
 .INCLUDE "doscomhd.asm"
 
 BEGINNING:
-        ACC8
-        LDA     $0080.W
-        BNE     @NAME
+        ACC8                    ; 8-bit A
+        LDA     $0080.W         ; do we have stuff on the command line?
+        BNE     @NAME           ; if so, go to @NAME (length > 0)
 @WORLD:
-        ACC16
-        LDA     #$0900
-        LDX     #MSG
+        ACC16                   ; 16-bit accumulator
+        LDA     #$0900          ; Ah=$09 => print until '$'
+        LDX     #MSG            ; print from MSG
         DOSCALL
-        LDA     #$0000
+        LDA     #$0000          ; Ah=$00 => terminate (exit code Al=$00)
         DOSCALL
 @NAME:
-        ACC16
-        LDA     #$0900
-        LDX     #MSG1
+        ACC16                   ; 16-bit accumulator
+        LDA     #$0900          ; Ah=$09 => print until '$'
+        LDX     #MSG1           ; print from MSG1
         DOSCALL
-        LDA     #$1900
-        LDX     #$0081 ; command line
+        LDA     #$1900          ; Ah=$19 => print until $00
+        LDX     #$0081          ; from the command line
         DOSCALL
-        LDA     #$0900
-        LDX     #MSG2
+        LDA     #$0900          ; Ah=$09 => print until '$'
+        LDX     #MSG2           ; print from MSG2
         DOSCALL
-        LDA     #$0000
+        LDA     #$0000          ; Ah=$00 => terminate (exit code Al=$00)
         DOSCALL
 
 MSG:
