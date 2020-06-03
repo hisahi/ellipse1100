@@ -39,10 +39,12 @@ SOFTWARE.
 int open_terminal = 0;
 int paused = 0;
 int breakpoint_enabled = 0;
+unsigned int breakpoint_bank = 0;
 unsigned int breakpoint_addr = 0;
 int f1wp = 0, f2wp = 0;
 int f1mount = 0, f2mount = 0;
 int doubleres = 0;
+int startpal = 0;
 char drive0fn[MAX_PATH_NAME + 1];
 char drive1fn[MAX_PATH_NAME + 1];
 unsigned long long total_cycles = 0;
@@ -141,7 +143,7 @@ int emulator_main()
     
     coro_init();
     emu_init("E1100em (F11 releases, F12 pauses)");
-    e1100_init(VS_NTSC);
+    e1100_init(startpal ? VS_PAL : VS_NTSC);
     load_rom();
     emu_get_tick_ns();
 
@@ -266,6 +268,10 @@ int main(int argc, char** argv)
         else if (!strcmp(argv[i], "-2"))
         {
             ++doubleres;
+        }
+        else if (!strcmp(argv[i], "-p"))
+        {
+            ++startpal;
         }
         else if (!strcmp(argv[i], "-h"))
         {

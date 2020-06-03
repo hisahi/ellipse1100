@@ -49,6 +49,24 @@ inline unsigned bcd2_add16(unsigned a, unsigned b)
     return r;
 }
 
+inline unsigned bcd2_sbc8(unsigned a, unsigned b)
+{
+    unsigned r = a - b;
+    if ((a & 0xF0) < (b & 0xF0)) r -= 0x60;
+    if ((a & 0x0F) < (b & 0x0F)) r -= 0x06;
+    return r;
+}
+
+inline unsigned bcd2_sbc16(unsigned a, unsigned b)
+{
+    unsigned r = a - b;
+    if ((a & 0xF000) < (b & 0xF000)) r -= 0x6000;
+    if ((a & 0x0F00) < (b & 0x0F00)) r -= 0x0600;
+    if ((a & 0x00F0) < (b & 0x00F0)) r -= 0x0060;
+    if ((a & 0x000F) < (b & 0x000F)) r -= 0x0006;
+    return r;
+}
+
 inline unsigned bcd3_add8(unsigned a, unsigned b, unsigned c)
 {
     return bcd2_add8(bcd2_add8(a, b), c);
@@ -57,6 +75,16 @@ inline unsigned bcd3_add8(unsigned a, unsigned b, unsigned c)
 inline unsigned bcd3_add16(unsigned a, unsigned b, unsigned c)
 {
     return bcd2_add16(bcd2_add16(a, b), c);
+}
+
+inline unsigned bcd3_sbc8(unsigned a, unsigned b, unsigned c)
+{
+    return bcd2_sbc8(bcd2_sbc8(a, b), c);
+}
+
+inline unsigned bcd3_sbc16(unsigned a, unsigned b, unsigned c)
+{
+    return bcd2_sbc16(bcd2_sbc16(a, b), c);
 }
 
 REG_8 alu_asl8(REG_8 v)
@@ -139,7 +167,7 @@ void alu_A_sbc8(REG_8 v)
 {
     unsigned r;
     if (regs.P & P_D)
-        r = bcd3_add8(GET_A(), (0xFF & ~v), ((regs.P & P_C) != 0));
+        r = bcd3_sbc16(GET_A(), v, 1 - ((regs.P & P_C) != 0));
     else
         r = GET_A() + (0xFF & ~v) + ((regs.P & P_C) != 0);
     SET_P_CV(r > 0xFF, 0 != (0x80 & (regs.A ^ r)));
@@ -151,7 +179,7 @@ void alu_A_sbc16(REG_16 v)
 {
     unsigned r;
     if (regs.P & P_D)
-        r = bcd3_add16(GET_A(), (0xFFFF & ~v), ((regs.P & P_C) != 0));
+        r = bcd3_sbc16(GET_A(), v, 1 - ((regs.P & P_C) != 0));
     else
         r = GET_A() + (0xFFFF & ~v) + ((regs.P & P_C) != 0);
     SET_P_CV(r > 0xFFFF, 0 != (0x8000 & (regs.A ^ r)));

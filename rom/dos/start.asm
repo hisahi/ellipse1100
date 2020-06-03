@@ -53,8 +53,10 @@ DOSSTART:
 ; also clears DOSUPDATEPATH
         LDA     #$0080
         STA     DOSIOBANK.B
+        STZ     DOSBUSY.B
         
         STZ     DOSCTBLCACHSECT.B
+        STZ     DOSHALTCLOCK.W
         STZ     DOSCACHEDDIRCH.B
         STZ     DOSKEYBBUFL.B
         STZ     DOSKEYBBUFR.B
@@ -75,6 +77,7 @@ DOSSTART:
         INX
         CPX     #14
         BCC     -
+        STA     DOSACTIVEDIR.W
 
         LDX     #DOSPATHSTRSIZE
 -       DEX
@@ -161,12 +164,10 @@ DOSIRQHANDLER:
         SETB8   $80
         SEI
         
+        BIT     DOSPAGE|DOSKEYBWAIT.W
+        BMI     @INCCOUNTER
         ; keyboard update routine
-        LDA     #$FF
-        TRB     DOSPAGE|DOSINNMI.W
-        BEQ     +
-        JSL     KEYB_INCTIMER.L
-+       JSL     KEYB_UPDKEYSI.L
+        JSL     KEYB_UPDKEYSI.L
         LDA     #28
         LDX     #26
         JSL     KEYB_GETKEY.L
@@ -186,9 +187,13 @@ DOSIRQHANDLER:
         TAX
         PLA
         STA     DOSPAGE|DOSKEYBBUF.W,X
-@DBG
 ++      JML     [DOSPAGE|DOSOLDIRQ.W]
 +       PLA
+        JML     [DOSPAGE|DOSOLDIRQ.W]
+
+@INCCOUNTER:
+        LDA     #$FF
+        TSB     DOSPAGE|DOSIRQCOUNTER.W
         JML     [DOSPAGE|DOSOLDIRQ.W]
 
 .ACCU 16

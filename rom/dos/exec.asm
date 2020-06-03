@@ -29,13 +29,12 @@ DOSLOADEXEC:
         LDA     DOSTMP7.B
         STA     DOSIOBANK.B
         ACC16
-        LDY     #$1A
+        LDY     #$1E
         LDA     (DOSTMP5.B),Y
         STA     DOSTMP8.B
         LDX     #$0100
 -       PHX
         LDY     DOSTMP8.B
-@DBG
         JSR     DOSLOADCHUNK.W
         BCS     @ERRC
         LDX     DOSTMP8.B
@@ -88,7 +87,7 @@ DOSLAUNCH:              ; $38 = launch program
         CLC
         ADC     #DIRCHUNKCACHE.W
         STA     DOSTMP5.B
-        LDY     #$1C
+        LDY     #$1A
         LDA     (DOSTMP5.B),Y
         CMP     #65280
         BCC     +

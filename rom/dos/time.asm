@@ -66,7 +66,12 @@ DOSUPDATETIMETICKSZERO:
         PHD
         PEA     DOSPAGE.W
         PLD
-
+        
+        LDA     DOSHALTCLOCK.W
+        BEQ     +
+-       LDA     DMA1STAT.L
+        BMI     -
++
         INC     DOSDATESECOND.B
         LDA     DOSDATESECOND.B
         CMP     #60

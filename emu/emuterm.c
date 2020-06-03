@@ -200,13 +200,26 @@ void emu_term_do_line(const char* buf, size_t buflen)
     }
     else if (!strcmp(tok0, "b")) // breakpoint
     {
-        unsigned int tmp;
+        unsigned int tmpb, tmp;
         int r = buflen > tok0len + 1
-                    ? sscanf(buf + tok0len + 1, "%04x", &tmp) : EOF;
+                    ? sscanf(buf + tok0len + 1, "%02x:%04x", &tmpb, &tmp)
+                    : EOF;
         if (breakpoint_enabled = r > 0)
         {
-            breakpoint_addr = tmp;
-            printf("Will break at PC=%04x\n", breakpoint_addr);
+            if (r == 2)
+            {
+                breakpoint_bank = tmpb;
+                breakpoint_addr = tmp;
+            }
+            else
+            {
+                breakpoint_bank = regs.K;
+                r = sscanf(buf + tok0len + 1, "%04x", &tmp);
+                if (r > 0)
+                    breakpoint_addr = tmp;
+            }
+            printf("Will break at PC=$%02x:%04x\n", breakpoint_bank,
+                                                    breakpoint_addr);
         }
         else if (r == EOF)
         {

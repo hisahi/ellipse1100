@@ -1,0 +1,1125 @@
+; Ellipse Workstation 1100 (fictitious computer)
+; Ellipse DOS command interpreter (CONSOLE.COM) commands
+; 
+; Copyright (c) 2020 Sampo Hippeläinen (hisahi)
+; 
+; Permission is hereby granted, free of charge, to any person obtaining a copy
+; of this software and associated documentation files (the "Software"), to deal
+; in the Software without restriction, including without limitation the rights
+; to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+; copies of the Software, and to permit persons to whom the Software is
+; furnished to do so, subject to the following conditions:
+; 
+; The above copyright notice and this permission notice shall be included in all
+; copies or substantial portions of the Software.
+; 
+; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+; AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+; SOFTWARE.
+; 
+; Written for the WLA-DX assembler
+;
+
+.ACCU 16
+COMMAND_EXIT:
+        LDA     #$0000
+        DOSCALL
+
+.ACCU 16
+COMMAND_CLS:
+        SEC
+        JSL     $013FEC ; clear screen
+        CLC
+        LDX     #0
+        LDY     #0
+        JSL     $013FFC ; move cursor
+        RTS
+
+.ACCU 16
+COMMAND_ECHO:
+        ACC8
+        LDA     CONBUF.W,X
+        BEQ     @ECHOST
+        LDA     CONBUF+1.W,X
+        BNE     +
+        LDA     CONBUF.W,X
+        CMP     #'.'
+        BEQ     @ECNL
++       LDA     CONBUF.W,X
+        AND     #$DF
+        CMP     #'O'
+        BEQ     @ECO
+@ECSTD:
+        ACC16
+        TXA
+        CLC
+        ADC     #CONBUF.W
+        TAX
+        LDA     #$1900
+        DOSCALL
+@ECNL:
+        ACC16
+        LDA     #$020D
+        DOSCALL
+        RTS
+.ACCU 8
+@ECO:
+        LDA     CONBUF+1.W,X
+        AND     #$DF
+        CMP     #'N'
+        BEQ     @ECON
+        CMP     #'F'
+        BNE     @ECSTD
+@ECOF:
+        LDA     CONBUF+2.W,X
+        AND     #$DF
+        CMP     #'F'
+        BNE     @ECSTD
+@ECOFF:
+        LDA     CONBUF+3.W,X
+        BNE     @ECSTD
+        BRA     @ECOFF0
+@ECON:
+        LDA     CONBUF+2.W,X
+        BEQ     @ECON0
+        BNE     @ECSTD
+.ACCU 8
+@ECHOST:
+        ACC16
+        LDA     #$1900
+        LDX     #CMDMSGECHO
+        DOSCALL
+
+        LDA     ECHOON.W
+        BNE     +
+        LDX     #CMDMSGECHOTOFF
+        BRA     ++
++       LDX     #CMDMSGECHOTON
+++      LDA     #$1900
+        DOSCALL
+
+        LDA     #$020D
+        DOSCALL
+
+        RTS
+@ECON0:
+        ACC16
+        LDA     #1
+        STA     ECHOON.W
+        RTS
+@ECOFF0:
+        ACC16
+        LDA     #0
+        STA     ECHOON.W
+        RTS
+
+.ACCU 16
+COMMAND_DATE:
+        LDA     #$2A00
+        DOSCALL
+
+        JSR     UNPACK_DATE
+
+        ACC16
+        LDX     #CMDDATEMSG
+        LDA     #$1900
+        DOSCALL
+
+        LDA     #$020D
+        DOSCALL
+
+@LOOP   LDX     #CMDDATEMSGNEW
+        LDA     #$1900
+        DOSCALL
+
+        ; read line to CONBUF
+        LDX     #CONBUF
+        LDY     #256
+        LDA     #$0A00
+        DOSCALL
+
+        CPY     #0
+        BEQ     +
+        ACC8
+        LDA     #0
+        STA     CONBUF.W,Y
+        ACC16
+        LDX     #0
+        JSR     COMMAND_DATE_PARSE.W
+        BCS     @FAIL
+
+@GOT    LDY     #0
+        JSR     COMMANDNUMTMPBCD8TOBIN.W
+        LDY     #1
+        JSR     COMMANDNUMTMPBCD8TOBIN.W
+        LDY     #2
+        JSR     COMMANDNUMTMPBCD16TOBIN.W
+
+        AXY16
+        LDA     NUMTMP+2.W
+        SEC
+        SBC     #1980
+        TAY
+        LDA     #$2B00
+        LDX     #0
+        AXY8
+        LDA     NUMTMP+1.W
+        LDX     NUMTMP.W
+        AXY16
+        DOSCALL
+        BCS     @FAIL
++       AXY16
+        RTS
+@FAIL   LDA     #$1900
+        LDX     #CMDDATEMSGINVALID
+        DOSCALL
+        BRA     @LOOP
+
+.ACCU 16
+COMMAND_TIME:
+        LDA     #$2C00
+        DOSCALL
+
+        JSR     UNPACK_TIME
+
+        ACC16
+        LDX     #CMDTIMEMSG
+        LDA     #$1900
+        DOSCALL
+
+        LDA     #$020D
+        DOSCALL
+
+@LOOP   LDX     #CMDTIMEMSGNEW
+        LDA     #$1900
+        DOSCALL
+
+        ; read line to CONBUF
+        LDX     #CONBUF
+        LDY     #256
+        LDA     #$0A00
+        DOSCALL
+
+        CPY     #0
+        BEQ     +
+        ACC8
+        LDA     #0
+        STA     CONBUF.W,Y
+        ACC16
+        LDX     #0
+        JSR     COMMAND_TIME_PARSE.W
+        BCS     @FAIL
+
+@GOT    LDY     #0
+        JSR     COMMANDNUMTMPBCD8TOBIN.W
+        LDY     #1
+        JSR     COMMANDNUMTMPBCD8TOBIN.W
+        LDY     #2
+        JSR     COMMANDNUMTMPBCD8TOBIN.W
+
+        LDA     #$2D00
+        LDX     #0
+        LDY     #0
+        AXY8
+        LDA     NUMTMP.W
+        LDX     NUMTMP+1.W
+        LDY     NUMTMP+2.W
+        AXY16
+        DOSCALL
+        BCS     @FAIL
++       AXY16
+        RTS
+@FAIL   LDA     #$1900
+        LDX     #CMDTIMEMSGINVALID
+        DOSCALL
+        BRA     @LOOP
+
+.ACCU 16
+COMMAND_PAUSE:
+        LDA     #$1900
+        LDX     #COMMANDPAUSEMSG
+        DOSCALL
+
+        LDA     #$0800
+        DOSCALL
+
+        LDA     #$020D
+        DOSCALL
+        RTS
+
+.ACCU 16
+COMMAND_CHDIR:
+        ACC8
+        LDA     CONBUF.W,X
+        BEQ     @SHOWCURDRIVE
+        LDA     CONBUF+2.W,X
+        BNE     @CHANGE
+        LDA     CONBUF+1.W,X
+        CMP     #':'
+        BNE     @CHANGE
+        LDA     CONBUF.W,X
+        JSR     CMDUPPERCASE.W
+        CMP     #'A'
+        BCC     @CHANGE
+        CMP     #'Z'+1
+        BCS     @CHANGE
+@SHOWOTHERDRIVE:
+        STA     PATHBUF.W
+        SEC
+        SBC     #'A'-1
+        ACC16
+        AND     #$001F
+        ORA     #$3100
+        BRA     @SHOWPATH
+@SHOWCURDRIVE:
+        ACC16
+        LDA     #$3E00
+        DOSCALL
+        ACC8
+        CLC
+        ADC     #$40
+        STA     PATHBUF.W
+        ACC16
+        LDA     #$3100
+@SHOWPATH:
+        LDX     #PATHBUF+3.W
+        DOSCALL
+        BCS     @ERR
+        LDA     #':'
+        STA     PATHBUF+1.W
+        LDA     #'\'
+        STA     PATHBUF+2.W
+        
+        LDA     #$1900
+        LDX     #PATHBUF
+        DOSCALL
+        
+        LDA     #$020D
+        DOSCALL
+
+        RTS
+@ERR:
+        JSR     COMMAND_ERROR.W
+        RTS
+@CHANGE:
+        ACC16
+        TXA
+        CLC
+        ADC     #CONBUF.W
+        TAX
+        LDA     #$3000
+        DOSCALL
+        BCC     +
+        JSR     COMMAND_ERROR.W
++       RTS
+
+.ACCU 16
+COMMAND_DIR:
+        STZ     DIRFLAGS.W
+        ACC8
+-       JSR     @FLAG
+        BCC     -
+        STX     DIRTMP.W
+@MAINLOOP:
+        LDA     CONBUF.W,X
+        BEQ     +
+        LDA     #'/'
+        BEQ     @POSTFLAG
+        INX
+        BRA     @MAINLOOP
++       JMP     COMMAND_DIR_INT
+@POSTFLAG:
+        STZ     CONBUF.W,X
+        JSR     @FLAGPOST
+        BEQ     @MAINLOOP
+@FLAG:
+        JSR     COMMANDPARSESKIPSP.W
+        LDA     CONBUF.W,X
+        CMP     #'/'
+        BNE     @FLAGNOT
+        INX
+@FLAGPOST:
+        LDA     CONBUF.W,X
+        INX
+        CMP     #'W'
+        BEQ     @FLAGWIDE
+        CMP     #'P'
+        BEQ     @FLAGPAUS
+        CLC
+        RTS
+@FLAGNOT:
+        SEC
+        RTS
+@FLAGWIDE:
+        LDA     DIRFLAGS.W
+        ORA     #1
+        STA     DIRFLAGS.W
+        CLC
+        RTS
+@FLAGPAUS
+        LDA     DIRFLAGS.W
+        ORA     #2
+        STA     DIRFLAGS.W
+        CLC
+        RTS
+
+COMMAND_DIR_INT:
+        LDX     DIRTMP.W
+        LDA     CONBUF.W,X
+        BNE     COMMAND_DIR_SUPPLIED
+COMMAND_DIR_EMPTY_PATH:
+        ACC16
+        STZ     DIRDRIVENUM.W
+        LDA     #$3E00
+        DOSCALL
+        CLC
+        ADC     #$40
+        ACC8
+        STA     PATHBUF.W
+        LDA     #':'
+        STA     PATHBUF+1.W
+        LDA     #'\'
+        STA     PATHBUF+2.W
+        ACC16
+        LDA     #$3100
+        LDX     #PATHBUF+3
+        DOSCALL
+        ACC8
+        LDX     #PATHBUF
+        JSR     COMMAND_DIR_HEADER
+        LDX     #COMMANDDIREMPTY
+        JSR     COMMAND_DIR_LIST
+        JSR     COMMAND_DIR_FOOTER
+        RTS
+
+COMMAND_DIR_SUPPLIED:
+        ACC16
+        STZ     DIRDRIVENUM.W
+        ACC8
+        ; scan to end of path
+-       INX
+        LDA     CONBUF.W,X
+        BNE     -
+        ; find last backslash
+-       LDA     CONBUF.W,X
+        CMP     #'\'
+        BEQ     ++
+        CPX     DIRTMP.W
+        BCC     ++
+        DEX
+        BRA     -
+++      ; X is now at last backslash, or before beginning of string
+        LDY     #$FFFF
+        PHX
+        ; copy from after X to NAMEBUF
+-       INX
+        INY
+        LDA     CONBUF.W,X
+        STA     NAMEBUF.W,Y
+        BEQ     +
+        CPY     #15
+        BCC     -
++       INY
+        LDA     #0
+        STA     NAMEBUF.W,Y
+        PLX
+        ; copy from before until X to end of PATHBUF
+        LDY     #_sizeof_PATHBUF
+-       DEY
+        CPX     DIRTMP.W
+        BEQ     +
+        BCC     +
+        LDA     CONBUF.W,X
+        STA     PATHBUF.W,Y
+        DEX
+        BRA     -
++       LDA     #0
+        STA     PATHBUF.W,Y
+        INY
+        STY     DIRTMP+2.W
+        ; resolve file. is it a folder? if so, shift backwards
+        LDA     NAMEBUF.W
+        BEQ     +++
+        ACC16
+        LDA     DIRTMP+2.W
+        CLC
+        ADC     #PATHBUF
+        TAX
+        LDY     #FISBUF.W
+        LDA     #$1100
+        DOSCALL
+        BCS     +++
+        LDA     FISBUF.W
+        AND     #$0040
+        BEQ     +++
+        ; scan X to end
+        ACC8
+        LDX     #0
+-       INX
+        LDA     NAMEBUF.W,X
+        BNE     -
+        ACC16
+        TXA
+        EOR     #$FFFF
+        CLC
+        ADC     #NAMEBUF.W
+        TAX
+        LDY     #NAMEBUF.W
+        ACC8
+-       LDA     $0000.W,Y
+        STA     $0000.W,X
+        DEC     DIRTMP+2.W
+        INX
+        INY
+        CPX     #NAMEBUF.W
+        BCC     -
+        LDA     #'\'
+        STA     NAMEBUF-1.W
+        LDA     #0
+        STA     NAMEBUF.W
++++     ACC8
+        LDA     #0
+        STA     NAMEBUF-1.W
+        ACC16
+        LDA     #PATHBUF
+        CLC
+        ADC     DIRTMP+2.W
+        TAX
+        ACC8
+        JSR     COMMAND_BUILD_XPATH.W
+        LDA     #'\'
+        STA     NAMEBUF-1.W
+
+        ACC16
+        LDA     XPATHBUF.W
+        AND     #$1F
+        STA     DIRDRIVENUM.W
+
+        LDX     #XPATHBUF
+        JSR     COMMAND_DIR_HEADER
+        LDA     #PATHBUF
+        CLC
+        ADC     DIRTMP+2.W
+        TAX
+        JSR     COMMAND_DIR_LIST
+        JSR     COMMAND_DIR_FOOTER
+
+        RTS
+
+COMMAND_DIR_HEADER:
+        ACC8
+        LDA     $0000.W,X
+        STA     COMMANDDIRHEADER1_FMT.W
+
+        ACC16
+        PHX
+        LDA     #$1900
+        LDX     #COMMANDDIRHEADER1
+        DOSCALL
+
+        ; volume label
+        ;TODO
+
+        LDA     #$1900
+        LDX     #COMMANDDIRHEADER2
+        DOSCALL
+
+        ; path
+        LDA     1,S
+        TAX
+        LDA     #$1900
+        DOSCALL
+
+        LDA     #$1900
+        LDX     #COMMANDDIRHEADER3
+        DOSCALL
+
+        STZ     DIRTOTALFILES.W
+        
+        PLX
+COMMAND_DIR_RTS:
+        RTS
+
+COMMAND_DIR_LIST:
+        ACC16
+        LDA     #$1100
+        LDY     #FISBUF.W
+        DOSCALL
+        BCS     @ERRFIRST
+@FILELOOP:
+        INC     DIRTOTALFILES.W
+        JSR     COMMAND_DIR_PRINT_FIS
+        
+        LDA     #$1200
+        LDY     #FISBUF.W
+        DOSCALL
+        BCC     @FILELOOP
+@ERRNEXT:
+        CMP     #DOS_ERR_NO_MORE_FILES
+        BEQ     COMMAND_DIR_RTS                 ; no more files
+        JSR     COMMAND_ERROR.W
+        ;TODO: handle disk errors?
+        BRA     COMMAND_DIR_RTS
+@ERRFIRST:
+        JSR     COMMAND_ERROR.W
+        ;TODO: handle disk errors?
+        BRA     COMMAND_DIR_RTS
+
+COMMAND_DIR_PRINT_FIS:
+        ACC8
+        BIT     FISBUF.W
+        BVC     @FILENAME
+        JMP     @DIRNAME
+@FILENAME:
+        ; 16 chars
+        JSR     DOSFISCOPYPADFILENAME.W
+        ACC16
+        LDA     #$1900
+        LDX     #NAMEBUF
+        DOSCALL
+        LDA     #$1900
+        LDX     #DOSMSGDIRSPACE-4
+        DOSCALL
+@FILESIZE:
+        ACC16
+        LDA     #$1900
+        LDX     #DOSMSGDIRSPACE-2
+        DOSCALL
+        LDA     FISBUF+$1A.W
+        STA     WIDENUM1.W
+        LDA     FISBUF+$1C.W
+        STA     WIDENUM2.W
+        JSR     UNPACKWIDEBCD.W
+        ; 10 digits
+        LDA     #$1900
+        LDX     #CMDWIDEBCDBUFFER
+        DOSCALL
+        LDA     #$1900
+        LDX     #DOSMSGDIRSPACE-2
+        DOSCALL
+@DATETIME:
+        JSR     DOSFISUNPACKDATE.W
+        JSR     UNPACK_DATE.W
+        ACC16
+        LDA     #$1900
+        LDX     #CMDDATEMSGFMT
+        DOSCALL
+        LDA     #$1900
+        LDX     #DOSMSGDIRSPACE-2
+        DOSCALL
+        JSR     DOSFISUNPACKTIME.W
+        JSR     UNPACK_TIME.W
+        ACC16
+        LDA     #$1900
+        LDX     #CMDTIMEMSGFMT
+        DOSCALL
+@END:
+        ACC16
+        LDA     #$020D
+        DOSCALL
+        RTS
+
+@DIRNAME:
+        ACC16
+        LDA     #$0200|'['
+        DOSCALL
+        JSR     DOSFISCOPYCOMPACTFILENAME.W
+        PHX
+        LDA     #$1900
+        LDX     #NAMEBUF.W
+        DOSCALL
+        LDA     #$0200|']'
+        DOSCALL
+        LDA     #DOSMSGDIRSPACE-17
+        CLC
+        ADC     1,S
+        PLX
+        TAX
+        LDA     #$1900
+        DOSCALL
+        LDA     #$1900
+        LDX     #DOSDIRMSGSUBDIR
+        DOSCALL
+        BRA     @DATETIME
+
+DOSFISCOPYPADFILENAME:
+        ACC8
+        LDY     #0
+        LDX     #0
+-       LDA     FISBUF+2.W,Y
+        CMP     #'.'
+        BEQ     @DOT
+@ST     STA     NAMEBUF.W,X
+        INX
+        INY
+        CPY     #$0E
+        BCC     -
+
+        LDA     #' '
+        STA     NAMEBUF.W,X
+        INX
+        LDA     #0
+        STA     NAMEBUF.W,X
+        ACC16
+        RTS
+.ACCu 8
+@DOT:   LDA     #' '
+        STA     NAMEBUF.W,X
+        INX
+        LDA     #'.'
+        BRA     @ST
+
+DOSFISCOPYCOMPACTFILENAME:
+        ACC8
+        LDY     #0
+        LDX     #0
+-       LDA     FISBUF+2.W,Y
+        CMP     #' '
+        BEQ     @SY
+        CPY     #0
+        BEQ     @ST
+        CMP     #'.'
+        BEQ     @DOT
+@ST     STA     NAMEBUF.W,X
+        INX
+@SY     INY
+        CPY     #$0E
+        BCC     -
+
+        LDA     #0
+        STA     NAMEBUF.W,X
+        ACC16
+        RTS
+.ACCu 8
+@DOT:   CPY     #2
+        BCS     +
+        LDA     FISBUF+2.W
+        CMP     #'.'
+        BEQ     @ST
++       LDA     FISBUF+3.W,Y
+        CMP     #' '
+        BEQ     @SY
+        LDA     #'.'
+        BRA     @ST
+
+DOSFISUNPACKDATE:
+        ACC16
+
+        LDA     FISBUF+$15.W
+        XBA
+        LSR     A
+        LSR     A
+        TAY
+        
+        LDA     FISBUF+$16.W
+        XBA
+        ASL     A
+        ASL     A
+        XBA
+        AND     #$0F
+        TAX
+        
+        LDA     FISBUF+$16.W
+        XBA
+        LSR     A
+        AND     #$1F
+        
+        ACC8
+        RTS
+
+DOSFISUNPACKTIME:
+        ACC16
+
+        LDA     FISBUF+$19.W
+        AND     #$7F
+        TAY
+        
+        LDA     FISBUF+$18.W
+        XBA
+        ASL     A
+        XBA
+        AND     #$1F
+        TAX
+        
+        LDA     FISBUF+$17.W
+        XBA
+        LSR     A
+        LSR     A
+        LSR     A
+        LSR     A
+        AND     #$1F
+        
+        ACC8
+        RTS
+
+COMMAND_DIR_FOOTER:
+        ACC16
+
+        LDA     #$1900
+        LDX     #COMMANDDIRFOOTER1
+        DOSCALL
+
+        ; total files
+        LDA     DIRTOTALFILES.W
+        STA     WIDENUM1.W
+        STZ     WIDENUM2.W
+        JSR     UNPACKWIDEBCD.W
+        ; 10 digits
+        LDA     #$1900
+        LDX     #CMDWIDEBCDBUFFER
+        DOSCALL
+
+        LDA     #$1900
+        LDX     #COMMANDDIRFOOTER2
+        DOSCALL
+
+        ; free space
+        LDA     DIRDRIVENUM.W
+        AND     #$001F
+        ORA     #$3500
+        DOSCALL
+        STA     WIDENUM1.W
+        STZ     WIDENUM2.W
+
+-       ASL     WIDENUM1.W
+        ROL     WIDENUM2.W
+        DEX
+        BNE     -
+
+        JSR     UNPACKWIDEBCD.W
+        ; 10 digits
+        LDA     #$1900
+        LDX     #CMDWIDEBCDBUFFER
+        DOSCALL
+
+        LDA     #$1900
+        LDX     #COMMANDDIRFOOTER3
+        DOSCALL
+
+        RTS
+
+COMMANDNUMTMPBCD8TOBIN:
+        PHP
+        ACC8
+        LDA     NUMTMP.W,Y
+        JSR     BCD8TOBIN.W
+        STA     NUMTMP.W,Y
+        PLP
+        RTS
+
+COMMANDNUMTMPBCD16TOBIN:
+        PHP
+        ACC16
+        LDA     NUMTMP.W,Y
+        JSR     BCD16TOBIN.W
+        STA     NUMTMP.W,Y
+        PLP
+        RTS
+
+.ACCU 8
+COMMANDPARSEBCDNUM8P:
+        LDA     CONBUF.W,X
+        CMP     #'0'
+        BCC     COMMANDPARSEBCDNUM8@ERR
+        CMP     #'9'+1
+        BCS     COMMANDPARSEBCDNUM8@ERR
+        INX
+        LDA     CONBUF.W,X
+        CMP     #'0'
+        BCC     @PART
+        CMP     #'9'+1
+        BCS     @PART
+        DEX
+        BRA     COMMANDPARSEBCDNUM8
+
+@PART:
+        DEX
+        LDA     CONBUF.W,X
+        INX
+        AND     #$0F
+        STA     NUMTMP.W,Y
+        INY
+        CLC
+        RTS
+
+.ACCU 8
+COMMANDPARSEBCDNUM8:
+        LDA     CONBUF.W,X
+        CMP     #'0'
+        BCC     @ERR
+        CMP     #'9'+1
+        BCS     @ERR
+        AND     #$0F
+        ASL     A
+        ASL     A
+        ASL     A
+        ASL     A
+        STA     NUMTMP.W,Y
+        INX
+        LDA     CONBUF.W,X
+        CMP     #'0'
+        BCC     @ERR
+        CMP     #'9'+1
+        BCS     @ERR
+        AND     #$0F
+        ORA     NUMTMP.W,Y
+        STA     NUMTMP.W,Y
+        INX
+        INY
+        CLC
+        RTS
+@ERR    SEC
+        RTS
+
+.ACCU 8
+COMMANDPARSEBCDNUM16:
+        JSR     COMMANDPARSEBCDNUM8.W
+        BCS     @ERR
+        JSR     COMMANDPARSEBCDNUM8.W
+        BCS     @ERR
+        CLC
+        RTS
+@ERR    SEC
+        RTS
+
+COMMAND_DATE_EXPECTSLASH:
+        LDA     CONBUF.W,X
+        CMP     #'/'
+        BEQ     +
+        CMP     #'-'
+        BEQ     +
+        SEC
+        RTS
++       INX
+        CLC
+        RTS
+
+COMMAND_TIME_EXPECTCOLON:
+        LDA     CONBUF.W,X
+        CMP     #':'
+        BEQ     +
+        CMP     #'.'
+        BEQ     +
+        SEC
+        RTS
++       INX
+        CLC
+        RTS
+
+
+UNPACK_DATE:
+        ACC8
+        PHY
+        PHX
+        JSR     BIN8TOBCD
+        STA     NUMTMP.W
+
+        PLX
+        TXA
+        JSR     BIN8TOBCD
+        STA     NUMTMP+1.W
+
+        PLY
+        ACC16
+        TYA
+        CLC
+        ADC     #1980
+        JSR     BIN16TOBCD
+        STA     NUMTMP+2.W
+
+        ACC8
+        LDA     NUMTMP+1.W
+        LDX     #CMDDATEMSGFMT
+        JSR     UNPACK_BCD8
+        
+        LDA     NUMTMP.W
+        LDX     #CMDDATEMSGFMT.W+3
+        JSR     UNPACK_BCD8
+
+        ACC16
+        LDA     NUMTMP+2.W
+        LDX     #CMDDATEMSGFMT.W+6
+        JSR     UNPACK_BCD16
+        RTS
+
+COMMAND_DATE_PARSE:
+        ACC8
+        LDY     #0
+        JSR     COMMANDPARSEBCDNUM8P
+        BCS     @ERR
+        JSR     COMMAND_DATE_EXPECTSLASH
+        BCS     @ERR
+        JSR     COMMANDPARSEBCDNUM8P
+        BCS     @ERR
+        JSR     COMMAND_DATE_EXPECTSLASH
+        BCS     @ERR
+        PHX
+        PHY
+        JSR     COMMANDPARSEBCDNUM16
+        BCS     @YEARFAIL
+        PLY
+        PLX
+@ERR    ACC16
+        RTS
+.ACCU 8
+@YEARFAIL:
+        PLY
+        PLX
+        JSR     COMMANDPARSEBCDNUM8
+        BCS     @ERR
+        LDA     NUMTMP-1.W,Y
+        STA     NUMTMP.W,Y
+        CMP     #$80
+        LDA     #$20
+        BCC     +
+        LDA     #$19
++       STA     NUMTMP-1.W,Y
+        CLC
+        RTS
+
+UNPACK_TIME:
+        ACC8
+        PHY
+        PHX
+        JSR     BIN8TOBCD
+        STA     NUMTMP.W
+
+        PLX
+        TXA
+        JSR     BIN8TOBCD
+        STA     NUMTMP+1.W
+
+        PLY
+        TYA
+        JSR     BIN8TOBCD
+        STA     NUMTMP+2.W
+
+        LDA     NUMTMP.W
+        CMP     #$12
+        LDA     #'A'
+        BCC     ++
+        LDA     #'P'
+        PHA
+        SED
+        LDA     NUMTMP.W
+        CMP     #$13
+        BCC     +
+        SEC
+        SBC     #$12
+        STA     NUMTMP.W
++       CLD
+        PLA
+++      STA     CMDTIMEMSGFMT.W+9
+
+        LDA     NUMTMP.W
+        BNE     +
+        LDA     #$12
++       LDX     #CMDTIMEMSGFMT
+        JSR     UNPACK_BCD8
+        
+        LDA     NUMTMP+1.W
+        LDX     #CMDTIMEMSGFMT.W+3
+        JSR     UNPACK_BCD8
+        
+        LDA     NUMTMP+2.W
+        LDX     #CMDTIMEMSGFMT.W+6
+        JSR     UNPACK_BCD8
+        RTS
+
+COMMAND_TIME_PARSE:
+        ACC8
+        
+        LDY     #0
+        JSR     COMMANDPARSEBCDNUM8P
+        BCS     @ERR
+        JSR     COMMAND_TIME_EXPECTCOLON
+        BCS     @ERR
+        JSR     COMMANDPARSEBCDNUM8
+        BCS     @ERR
+        JSR     COMMAND_TIME_EXPECTCOLON
+        BCS     @ERR
+        JSR     COMMANDPARSEBCDNUM8
+        BCS     @ERR
+        JSR     COMMANDPARSESKIPSP
+
+        LDA     CONBUF.W,X
+        BEQ     @MIL
+        CMP     #'A'
+        BEQ     @AM
+        CMP     #'a'
+        BEQ     @AM
+        CMP     #'P'
+        BEQ     @PM
+        CMP     #'p'
+        BEQ     @PM
+        BRA     @ERRC
+
+        CLC
+        ACC16
+        RTS
+@ERRC   SEC
+@ERR    ACC16
+        RTS
+
+.ACCU 8
+@MIL    LDA     NUMTMP.W
+        CMP     #$24
+        BEQ     @AM12
+        BCS     @ERRC
+        CLC
+        ACC16
+        RTS
+
+.ACCU 8
+@AM     INX
+        LDA     CONBUF.W,X
+        CMP     #'M'
+        BEQ     +
+        CMP     #'m'
+        BEQ     +
+        BRA     @ERRC
++       INX
+        LDA     CONBUF.W,X
+        BNE     @ERRC
+
+        LDA     NUMTMP.W
+        CMP     #$12
+        BEQ     @AM12
+        BCS     @ERRC
+        BRA     +
+@AM12   LDA     #0
++       STA     NUMTMP.W
+        CLC
+        ACC16
+        RTS
+
+.ACCU 8
+@PM     INX
+        LDA     CONBUF.W,X
+        CMP     #'M'
+        BEQ     +
+        CMP     #'m'
+        BEQ     +
+        BRA     @ERRC
++       INX
+        LDA     CONBUF.W,X
+        BNE     @ERRC
+
+        LDA     NUMTMP.W
+        CMP     #$12
+        BEQ     @PM12
+        BCS     @ERRC
+        BRA     +
+@PM12   LDA     #0
++       SED
+        CLC
+        ADC     #$12
+        CLD
+        STA     NUMTMP.W
+        CLC
+        ACC16
+        RTS

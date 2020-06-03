@@ -256,6 +256,35 @@ TEXT_CLEAR_SCREEN:
         BCS     +
         JMP     TEXT_CLEAR_BUFFER
 +       JSR     TEXT_CLEAR_BUFFER
+
+TEXT_FAST_CLEAR_SCREEN:
+        PHB
+        PEA     $0000
+        PLB
+        PLB
+        ACC16
+        LDA     #($FF00&(TEXT_BGCOLOR>>8))|$3F
+        STA     DMA0BNKS.W
+        STZ     DMA0CNT.W
+        LDA     #($FFFF&TEXT_BGCOLOR)
+        STA     DMA0SRC.W
+        STZ     DMA0DST.W
+
+        LDX     #3
+
+--      ACC16
+        INC     DMA0BNKS.W
+        ACC8
+        LDA     #$94.B          ; enable DMA
+        STA     DMA0CTRL.W      ; fixed SRC address, changing DST address
+-       BIT     DMA0STAT.W
+        BMI     -
+        DEX
+        BNE     --
+        
+        PLB
+        RTS
+
 ; clobbers A, X, Y
 TEXT_UPDATE_ENTIRE_SCREEN:
         PHP

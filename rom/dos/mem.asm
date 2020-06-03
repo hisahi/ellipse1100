@@ -146,9 +146,9 @@ DOSCOPYBXSTRBUFUC:
 .ACCU 8
 ; make character uppercase
 DOSCHARUC:
-        CMP     #'A'
+        CMP     #'a'
         BCC     +
-        CMP     #'Z'+1
+        CMP     #'z'+1
         BCS     +
         AND     #$DF
 +       RTS

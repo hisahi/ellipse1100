@@ -28,6 +28,9 @@ SOFTWARE.
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
+#include <time.h>
+#include <unistd.h> /* required for chdir, otherwise implement it yourself */
 
 typedef struct add_file
 {
@@ -90,6 +93,8 @@ unsigned sectorcount = 0;
 unsigned chunkcount = 0;
 unsigned sectorspertrack = 0;
 unsigned sectorsperctable = 0;
+unsigned long curdir = 0;
+unsigned long curdirchunk = 0;
 char label[16] = {' '};
 
 int read_fs_file(const char* fsfn)
@@ -137,13 +142,81 @@ int read_fs_file(const char* fsfn)
             if (*src && dst >= label + 16)
                 warn_puts("label too long, truncated at 16 chars");
         }
+        else if (0 == strcmp(tmp, "dir"))
+        {
+            char fn[15] = {'\0'};
+            ADD_FILE* af;
+            char* dot;
+            char* fnend;
+            int dyear, dmonth, dday, dhour, dminute, dsecond, attr, i;
+            if (sscanf(line, "dir %4s %14s %d-%d-%d %d:%d:%d", tmp, fn,
+                    &dyear, &dmonth, &dday, &dhour, &dminute, &dsecond) < 8)
+                return fail_puts("invalid dir command");
+            
+            if (dyear < 1980 || dyear > 1980 + 511)
+                return fail_puts("invalid date supplied for 'dir'");
+            if (dmonth < 1 || dmonth > 12)
+                return fail_puts("invalid date supplied for 'dir'");
+            if (dday < 1 || dday > days_per_month(dmonth - 1, dyear + 1980))
+                return fail_puts("invalid date supplied for 'dir'");
+            if (dhour < 0 || dhour > 23)
+                return fail_puts("invalid date supplied for 'dir'");
+            if (dminute < 0 || dminute > 59)
+                return fail_puts("invalid date supplied for 'dir'");
+            if (dsecond < 0 || dsecond > 59)
+                return fail_puts("invalid date supplied for 'dir'");
+            
+            attr = 1 << 14;
+            if (strchr(tmp, 'S'))
+                attr |= 1;
+            if (strchr(tmp, 'H'))
+                attr |= 2;
+            if (strchr(tmp, 'R'))
+                attr |= 4;
+
+            dyear -= 1980;
+
+            if (add_files_cnt == add_files_sz)
+            {
+                if (!(add_files = realloc(add_files, 
+                            sizeof(ADD_FILE) * (add_files_sz *= 2))))
+                    return fail_puts("cannot allocate memory for file buffer");
+            }
+
+            af = &add_files[add_files_cnt++];
+
+            strcpy(af->srcfn, fn);
+            strcpy(af->fn, "          .   ");
+            dot = fn;
+            fnend = fn + strlen(fn);
+            while (*dot && *dot != '.')
+                ++dot;
+            if (dot - fn > 10)
+                return fail_puts("file name can be at most 10 characters long");
+            if (fnend - dot > 4)
+                return fail_puts("extension can be at most 3 characters long");
+            memcpy(af->fn, fn, dot - fn);
+            if (*dot)
+                memcpy(af->fn + 11, dot + 1, fnend - dot - 1);
+
+            for (i = 0; i < 16; ++i)
+                af->fn[i] = toupper(af->fn[i]);
+
+            af->attr = attr;
+            af->year = dyear;
+            af->month = dmonth;
+            af->day = dday;
+            af->hour = dhour;
+            af->minute = dminute;
+            af->second = dsecond;
+        }
         else if (0 == strcmp(tmp, "file"))
         {
             char fn[15] = {'\0'};
             ADD_FILE* af;
             char* dot;
             char* fnend;
-            int dyear, dmonth, dday, dhour, dminute, dsecond, attr;
+            int dyear, dmonth, dday, dhour, dminute, dsecond, attr, i;
             if (sscanf(line, "file %4s %14s %d-%d-%d %d:%d:%d", tmp, fn,
                     &dyear, &dmonth, &dday, &dhour, &dminute, &dsecond) < 8)
                 return fail_puts("invalid file command");
@@ -191,7 +264,11 @@ int read_fs_file(const char* fsfn)
             if (fnend - dot > 4)
                 return fail_puts("extension can be at most 3 characters long");
             memcpy(af->fn, fn, dot - fn);
-            memcpy(af->fn + 11, dot + 1, fnend - dot - 1);
+            if (*dot)
+                memcpy(af->fn + 11, dot + 1, fnend - dot - 1);
+
+            for (i = 0; i < 16; ++i)
+                af->fn[i] = toupper(af->fn[i]);
 
             af->attr = attr;
             af->year = dyear;
@@ -282,6 +359,28 @@ int write_elfs_ctable(FILE* floppy)
     return ferror(floppy) ? -1 : 0;
 }
 
+int get_next_chunk(FILE* floppy, unsigned* chunk, unsigned* fileindx)
+{
+    unsigned base = sectorsperctable * 512;
+    unsigned char buf[2];
+    unsigned oldpos;
+
+    /* seek to chunk table */
+    if (*chunk >= chunkcount)
+        return 0xFFFE; /* bad chunk */
+
+    oldpos = ftell(floppy);
+    fseek(floppy, 1024 + *chunk * 2, SEEK_SET);
+    fread(buf, 1, 2, floppy);
+    if (ferror(floppy))
+        return -1;
+
+    *chunk = buf[0] | (buf[1] << 8);
+    *fileindx = base + *chunk * 1024;
+    fseek(floppy, oldpos, SEEK_SET);
+    return 0;
+}
+
 int get_next_free_chunk(FILE* floppy, unsigned* chunk, unsigned* fileindx)
 {
     unsigned i;
@@ -336,13 +435,131 @@ int get_next_free_chunk(FILE* floppy, unsigned* chunk, unsigned* fileindx)
     *chunk = nextfreechunk;
     *fileindx = base + *chunk * 1024;
     fseek(floppy, oldpos, SEEK_SET);
-    return 0;
+    return ferror(floppy);
+}
+
+int directory_find_file(FILE* floppy, const char* fn, unsigned* result,
+                        unsigned* attr, unsigned* fchunk)
+{
+    char buf[32];
+    unsigned oldpos;
+    unsigned newpos;
+    unsigned i;
+    unsigned chunk;
+
+    *result = 0;
+    *attr = 0;
+    *fchunk = 0;
+    oldpos = ftell(floppy);
+    newpos = curdir;
+    chunk = curdirchunk;
+
+    while (!*result && chunk != 0xFFFF)
+    {
+        if (fseek(floppy, newpos, SEEK_SET))
+            return -1;
+        
+        for (i = 0; i < 32; ++i)
+        {
+            if (fread(buf, 1, 32, floppy) < 32)
+                return -1;
+            if (!strncmp(buf + 2, fn, 14))
+            {
+                *result = ftell(floppy) - 32;
+                *attr = buf[0] | (buf[1] << 8);
+                *fchunk = buf[30] | (buf[31] << 8);
+                break;
+            }
+        }
+
+        if (get_next_chunk(floppy, &chunk, &newpos))
+            return -1;
+    }
+
+    fseek(floppy, oldpos, SEEK_SET);
+    return ferror(floppy);
+}
+
+int go_up_directory(FILE* floppy)
+{
+    unsigned result;
+    unsigned attr;
+    unsigned fchunk;
+    unsigned base = sectorsperctable * 512;
+
+    if (directory_find_file(floppy, "..        .   ", &result, &attr, &fchunk))
+        return -1;
+    if (!result)
+        return 0;
+    curdirchunk = fchunk;
+    curdir = base * 1024 + curdirchunk;
+    fseek(floppy, curdir, SEEK_SET);
+    return ferror(floppy) || find_free_dir_slot(floppy);
+}
+
+int find_free_dir_slot(FILE* floppy)
+{
+    unsigned pos;
+    char buf[32];
+    for (;;)
+    {
+        pos = ftell(floppy);
+        if (pos != curdir && !(pos & ~1023)) /* end of this chunk */
+        {
+            unsigned chunk, fileindx;
+
+            chunk = curdirchunk;
+            /* end of chunk */
+            if (get_next_chunk(floppy, &chunk, &fileindx))
+                return fail_perror("cannot get next chunk");
+            if (chunk == 0xFFFF)
+            {
+                if (get_next_free_chunk(floppy, &chunk, &fileindx))
+                    return fail_puts("disk is full");
+                fseek(floppy, fileindx, SEEK_SET);
+                if (initialize_directory_chunk(chunk, floppy))
+                    return fail_puts("directory init error");
+                return;
+            }
+            fseek(floppy, fileindx, SEEK_SET);
+        }
+        
+        
+        if (fread(buf, 1, 32, floppy) < 32)
+            return fail_perror("cannot read file entry");
+        if (buf[0] & 128)
+            return;
+    }
 }
 
 int directory_add_file_raw(FILE* floppy, ADD_FILE file,
                     unsigned start, unsigned long size)
 {
+    unsigned pos;
+    unsigned findx;
+    unsigned attr;
+    unsigned fchunk;
     char buf[5];
+
+    pos = ftell(floppy);
+    if (pos != curdir && !(pos & ~1023)) /* end of this chunk */
+    {
+        unsigned chunk, fileindx;
+
+        chunk = curdirchunk;
+        /* end of chunk */
+        if (get_next_free_chunk(floppy, &chunk, &fileindx))
+            return fail_puts("disk is full");
+        fseek(floppy, fileindx, SEEK_SET);
+        if (initialize_directory_chunk(chunk, floppy))
+            return fail_puts("directory init error");
+    }
+
+    if (directory_find_file(floppy, file.fn, &findx, &attr, &fchunk))
+        return fail_puts("file find error");
+    if (findx)
+        return fail_puts("file name already taken");
+
     buf[0] = (file.attr >> 8) & 0xFF;
     buf[1] = file.attr & 0xFF;
     fwrite(buf, 1, 2, floppy);              /* attributes */
@@ -357,15 +574,15 @@ int directory_add_file_raw(FILE* floppy, ADD_FILE file,
     
     fwrite(buf, 1, 5, floppy);              /* date */
     
-    buf[0] = start & 0xFF;
-    buf[1] = (start >> 8) & 0xFF;
-    fwrite(buf, 1, 2, floppy);              /* starting chunk */
-    
     buf[0] = size & 0xFF;
     buf[1] = (size >> 8) & 0xFF;
     buf[2] = (size >> 16) & 0xFF;
     buf[3] = (size >> 24) & 0xFF;
     fwrite(buf, 1, 4, floppy);              /* file size */
+    
+    buf[0] = start & 0xFF;
+    buf[1] = (start >> 8) & 0xFF;
+    fwrite(buf, 1, 2, floppy);              /* starting chunk */
 
     return ferror(floppy);
 }
@@ -376,10 +593,43 @@ int directory_add_file(FILE* floppy, ADD_FILE file)
     char buf[1024];
     unsigned dirpos;
     unsigned read;
+    unsigned attr;
     unsigned long total = 0;
     unsigned chunk = 0;
     unsigned first_chunk = 0xFFFF;
     unsigned fileindx;
+
+    if (file.attr & (1 << 14))
+    {
+        unsigned base = sectorsperctable * 512;
+        /* subdirectory */
+        printf("[%s] subdirectory\n", file.srcfn);
+        if (!strcmp(file.srcfn, "."))
+            return;
+        if (chdir(file.srcfn))
+            return fail_perror("cannot go to 'dir' directory");
+        if (!strcmp(file.srcfn, ".."))
+            return go_up_directory(floppy);
+        if (directory_find_file(floppy, file.fn, &fileindx, &attr, &chunk))
+            return fail_perror("file find error");
+        if (chunk)
+        {
+            if (!(attr & (1 << 14)))
+                return fail_puts("not a subdirectory");
+            curdirchunk = chunk;
+            curdir = base + chunk * 1024;
+            fseek(floppy, curdir, SEEK_SET);
+            return ferror(floppy) || find_free_dir_slot(floppy);
+        }
+        chunk = first_chunk;
+        if (get_next_free_chunk(floppy, &chunk, &fileindx))
+            return fail_puts("disk is full");
+        if (directory_add_file_raw(floppy, file, chunk, total))
+            return -1;
+        if (fseek(floppy, base + chunk * 1024, SEEK_SET))
+            return fail_perror("seek error");
+        return initialize_directory(chunk, curdirchunk, floppy);
+    }
 
     if (!(srcfile = fopen(file.srcfn, "rb")))
         return fail_perror("cannot open 'file'");
@@ -405,31 +655,46 @@ int directory_add_file(FILE* floppy, ADD_FILE file)
     return directory_add_file_raw(floppy, file, first_chunk, total);
 }
 
-int initialize_directory(unsigned chunk, unsigned root_chunk, FILE* floppy)
+int initialize_directory_chunk(unsigned chunk, FILE* floppy)
 {
     unsigned i;
     unsigned oldpos;
-    ADD_FILE af;
     
     oldpos = ftell(floppy);
     for (i = 0; i < 512; ++i)
         fwrite("\377\377", 1, 2, floppy);   /* blank slot */
 
-    strcpy(af.fn, ".         .   ");
-    af.attr = 1 << 14;
-    af.year = 0;
-    af.month = 0;
-    af.day = 0;
-    af.hour = 0;
-    af.minute = 0;
-    af.second = 0;
-    
     if (!ferror(floppy))
         fseek(floppy, oldpos, SEEK_SET);
+    return ferror(floppy) ? -1 : 0;
+}
+
+int initialize_directory(unsigned chunk, unsigned root_chunk, FILE* floppy)
+{
+    ADD_FILE af;
+    time_t timer;
+    struct tm* tinfo;
+    
+    if (initialize_directory_chunk(chunk, floppy))
+        return -1;
+    curdir = ftell(floppy);
+
+    time(&timer);
+    tinfo = localtime(&timer);
+
+    strcpy(af.fn, ".         .   ");
+    af.attr = 1 << 14;
+    af.year = tinfo->tm_year - 80;
+    af.month = tinfo->tm_mon + 1;
+    af.day = tinfo->tm_mday;
+    af.hour = tinfo->tm_hour;
+    af.minute = tinfo->tm_min;
+    af.second = tinfo->tm_sec % 60;
+    
     if (directory_add_file_raw(floppy, af, chunk, 0))
         return -1;
     strcpy(af.fn, "..        .   ");
-    if (root_chunk != 0 && directory_add_file_raw(floppy, af, root_chunk, 0))
+    if (root_chunk && directory_add_file_raw(floppy, af, root_chunk, 0))
         return -1;
     return ferror(floppy) ? -1 : 0;
 }
@@ -448,6 +713,7 @@ int write_elfs_files(FILE* floppy)
 
     if (initialize_directory(chunk, 0, floppy))
         return fail_perror("cannot initialize directory");
+    curdirchunk = chunk;
 
     for (i = 0; i < add_files_cnt; ++i)
         if (directory_add_file(floppy, add_files[i]))

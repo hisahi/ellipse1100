@@ -96,9 +96,9 @@ const DisasmAddrMode disasm_addr_modes[] = {
     _A(immX), _A(idpx), _A(immX), _A(  sr), _A(  dp), _A(  dp), _A(  dp), _A(idpl), _A(none), _A(immA), _A(none), _A(none), _A( abs), _A( abs), _A( abs), _A( abl),
     _A( imm), _A(idpy), _A( idp), _A(idsy), _A( dpx), _A( dpx), _A( dpy), _A(idly), _A(none), _A(absy), _A(none), _A(none), _A(absx), _A(absx), _A(absy), _A(ablx),
     
-    _A( imm), _A(idpx), _A( imm), _A(  sr), _A(  dp), _A(  dp), _A(  dp), _A(idpl), _A(none), _A(immA), _A(none), _A(none), _A( abs), _A( abs), _A( abs), _A( abl),
+    _A(immX), _A(idpx), _A( imm), _A(  sr), _A(  dp), _A(  dp), _A(  dp), _A(idpl), _A(none), _A(immA), _A(none), _A(none), _A( abs), _A( abs), _A( abs), _A( abl),
     _A( imm), _A(idpy), _A( idp), _A(idsy), _A( idp), _A( dpx), _A( dpx), _A(idly), _A(none), _A(absy), _A(none), _A(none), _A(iabl), _A(absx), _A(absx), _A(ablx),
-    _A( imm), _A(idpx), _A( imm), _A(  sr), _A(  dp), _A(  dp), _A(  dp), _A(idpl), _A(none), _A(immA), _A(none), _A(none), _A( abs), _A( abs), _A( abs), _A( abl),
+    _A(immX), _A(idpx), _A( imm), _A(  sr), _A(  dp), _A(  dp), _A(  dp), _A(idpl), _A(none), _A(immA), _A(none), _A(none), _A( abs), _A( abs), _A( abs), _A( abl),
     _A( imm), _A(idpy), _A( idp), _A(idsy), _A( abs), _A( dpx), _A( dpx), _A(idly), _A(none), _A(absy), _A(none), _A(none), _A(iabx), _A(absx), _A(absx), _A(ablx)
 };
 

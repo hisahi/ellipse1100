@@ -46,6 +46,7 @@ SOFTWARE.
 
 extern int paused;
 extern int breakpoint_enabled;
+extern unsigned int breakpoint_bank;
 extern unsigned int breakpoint_addr;
 extern unsigned long long total_cycles;
 extern unsigned long long total_ms;

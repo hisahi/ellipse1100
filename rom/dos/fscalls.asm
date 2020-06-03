@@ -36,24 +36,13 @@ DOSSETDRIVE:
         BEQ     @BAD
         CMP     #3
         BCS     @BAD
-        STA     DOSACTIVEDRIVE.B
-
         PHX
         PHY
-        JSR     DOSLOADFSMB.W
-        BCS     @FAIL
-        JSR     DOSVERIFYVOLUME.W
-        BCS     @FAIL
-        JSR     DOSLOADCTABLE.W
-        BCS     @FAIL
+        STA     DOSACTIVEDRIVE.B
+        JSR     DOSPAGEINACTIVEDRIVE.W
         PLY
         PLX
 
-        LDX     DOSREALDRIVE.B
-        JSR     DOSPAGEOUTDIR.W
-        ; restore old active drive temporarily to flush open files
-        STX     DOSACTIVEDRIVE.B
-        JSR     DOSFLUSHALLFILES.W
         JSR     DOSPAGEOUTDIR.W
 
         DOSMEMEXIT
@@ -68,7 +57,7 @@ DOSSETDRIVE:
 ; $3E = get active drive
 DOSGETDRIVE:
         DOSMEMENTER
-        LDA     DOSACTIVEDRIVE.B
+        LDA     DOSREALDRIVE.B
         DOSMEMEXIT
         CLC
         RTS
@@ -98,6 +87,8 @@ DOSPACKFIS:
         STA     $0020,Y
         LDA     DOSLD|DOSNEXTFILEOFF.L
         STA     $0022,Y
+        LDA     DOSLD|DOSNEXTFILEDRV.L
+        STA     $0024,Y
         RTS
 
 DOSUNPACKFIS:
@@ -108,9 +99,12 @@ DOSUNPACKFIS:
         LDA     #0
         STA     DOSBANKD|DOSSTRINGCACHE+16.L
         LDA     $0020,Y
-        STA     DOSBANKD|DOSPAGE|DOSNEXTFILEDIR.L
+        STA     DOSLD|DOSNEXTFILEDIR.L
         LDA     $0022,Y
-        STA     DOSBANKD|DOSPAGE|DOSNEXTFILEOFF.L
+        STA     DOSLD|DOSNEXTFILEOFF.L
+        LDA     $0024,Y
+        AND     #$1F
+        STA     DOSLD|DOSNEXTFILEDRV.L
         RTS
 
 ; $11 = find first matching file
@@ -129,6 +123,8 @@ DOSFINDFIRST:
         BCS     @ERRM
         LDA     DOSACTIVEDIR.B
         STA     DOSNEXTFILEDIR.B
+        LDA     DOSACTIVEDRIVE.B
+        STA     DOSNEXTFILEDRV.B
         STZ     DOSNEXTFILEOFF.B
         PHX
         JSR     DOSRESOLVENEXTFILE.W
@@ -158,6 +154,10 @@ DOSFINDNEXT:
         ACC16
         JSR     DOSPAGEINDIR.W
         PHX
+        LDA     DOSNEXTFILEOFF.B
+        CLC
+        ADC     #$0020
+        STA     DOSNEXTFILEOFF.B
         JSR     DOSRESOLVENEXTFILE.W
         PLX
         BCS     @ERRM
@@ -424,26 +424,31 @@ DOSSETDIR:
         ENTERDOSRAM
         ACC8
         LDA     DOSACTIVEDRIVE.B
-        STA     DOSTMP1.B
+        STA     DOSTMPX1.B
         LDA     #$80
         STA     DOSIOBANK.B
-        LDA     #$01
+        LDA     #$FF
         STA     DOSUPDATEPATH.B
         ACC16
         JSR     DOSPAGEINDIR.W
+        LDX     #0
         JSR     DOSRESOLVEPATH.W
         BCS     @ERRM
-        LDA     DOSTMP1.B
-        STA     DOSACTIVEDRIVE.B
         JSR     DOSPAGEOUTDIR.W
+        LDA     DOSTMPX1.B
+        STA     DOSACTIVEDRIVE.B
+        STA     DOSREALDRIVE.B
+        STZ     DOSUPDATEPATH.B
         EXITDOSRAM
         PLY
         PLX
         CLC
         RTS
-@ERRM   LDA     DOSTMP1.B
+@ERRM   PHA
+        LDA     DOSTMPX1.B
         STA     DOSACTIVEDRIVE.B
         STZ     DOSUPDATEPATH.B
+        PLA
         EXITDOSRAM
 @ERR    PLY
         PLX
@@ -467,7 +472,6 @@ DOSGETDIR:
         ENTERDOSRAM
         JSR     DOSCURPATHTOX.W
         EXITDOSRAM
-        DEX
         DEY
         ACC8
 -       INX
@@ -486,4 +490,18 @@ DOSGETDIR:
         PLA
         LDA     #DOS_ERR_INVALID_DRIVE
         SEC
+        RTS
+
+; $35 = get free space
+DOSGETFREESPACE:
+        PHY
+        ENTERDOSRAM
+        AND     #$FF
+        BEQ     +
+        STA     DOSACTIVEDRIVE.B
++       JSR     DOSCOUNTFREESECTORS.W
+        BCS     ++
+        LDX     FSMBCACHE+$10.W
+++      EXITDOSRAM
+        PLY
         RTS

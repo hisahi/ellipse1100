@@ -47,7 +47,7 @@ SOFTWARE.
 #define _DRIVE_HEAD_SETTLE_TIME_MS 2
 #define _DRIVE_RPM 300
 
-#define _ABS(x) ((x < 0) ? (-x) : (x))
+#define _ABS(x) (((x) < 0) ? (-(x)) : (x))
 
 typedef enum floppy_size {
     FLOPPY_NONE, FLOPPY_SD, FLOPPY_HD, FLOPPY_UD,

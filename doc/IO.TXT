@@ -8,7 +8,8 @@ Ellipse 1100 Memory Mapped I/O Registers
 Only the lowest byte matters when interfacing with memory-mapped I/O.
 
 $00     Read            System status.
-                                --------
+                                -------V
+                                    V: 1 for PAL (50 Hz), 0 for NTSC (60 Hz).
 $00     Write           System reset. Write #$FF to hard reset.
 $01     Read/Write      The "stack half-bank". Controls the RAM area
                         that $00:0000 - $00:03FF points at. For example:

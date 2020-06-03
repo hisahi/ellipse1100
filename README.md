@@ -35,8 +35,8 @@ multi-tasking graphical operating system.
 
 This repository includes design notes for the Ellipse 1100, a fictional
 16-bit home computer, as well as a cross-platform emulator for it
-and the code for the ROM, including the bootloader and DOS, as well
-as a graphical user interface at some point (on a floppy).
+and the code for the ROM, including the bootloader, Ellipse DOS (on a floppy),
+as well as a graphical OS (SublimOS) at some point (also on a floppy).
 
 The emulator is written in C and requires a backend (so far SDL2 is implemented)
 and a coroutine library (both [libco](https://byuu.org/projects/libco) and [libaco](https://github.com/hnes/libaco) are supported).

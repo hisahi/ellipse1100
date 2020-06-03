@@ -1,0 +1,4 @@
+console.com drive changing
+console.com path to .com
+fopen syscall
+createfile, removefile, renamefile, mkdir, rmdir...

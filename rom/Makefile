@@ -3,7 +3,7 @@ AS=wla-65816
 LD=wlalink
 AFLAGS=-v
 LDFLAGS=-d -v -S
-CFLAGS=
+CFLAGS=-ansi -pedantic
 
 default: all
 
@@ -39,7 +39,7 @@ dos/hello.obj: dos/hello.asm
 HELLO.COM: dos/hello.obj
 	$(LD) $(LDFLAGS) -b hello.lnk $@
 
-dos/console.obj: dos/console.asm
+dos/console.obj: dos/console.asm dos/consolec.asm
 	$(AS) $(AFLAGS) -o $@ $<
 CONSOLE.COM: dos/console.obj
 	$(LD) $(LDFLAGS) -b console.lnk $@

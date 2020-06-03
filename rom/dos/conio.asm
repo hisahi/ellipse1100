@@ -24,30 +24,77 @@
 ; Written for the WLA-DX assembler
 ;
 
+DOSREADCONKEY:
+        JSL     KEYB_UPDKEYSI.L
+        AXY16
+        LDA     #28
+        LDX     #26
+        JSL     KEYB_GETKEY.L
+        ACC8
+        BCC     ++
+        BEQ     ++
+        PHA
+        LDA     DOSKEYBBUFR.W
+        INC     A
+        AND     #$0F
+        CMP     DOSKEYBBUFL.W
+        BEQ     @FULL
+        STA     DOSKEYBBUFR.W
+        DEC     A
+        AND     #$0F
+        TAX
+        PLA
+        STA     DOSKEYBBUF.W,X
+++      AXY16
+        RTS
+@FULL   ; keyboard buffer is full
+        PLA
+        AXY16
+        RTS
+
 DOSREADCONCHAR:
         PHY
         PHX
-@WAI
+        ENTERDOSRAM
+        LDA     #$FF00
+        STA     DOSIRQCOUNTER.B                 ; IRQ=0, KEYWAIT=1
+@LOOP
+        ACC8
+        LDA     DOSIRQCOUNTER.B
+        BNE     +
         WAI
-        LDA     DOSLD|DOSINNMI.W
++       LDA     #$00
+        STA     DOSIRQCOUNTER.B                 ; IRQ=0, KEYWAIT=1
+        LDA     DOSINNMI.B
         BEQ     +
         LDA     #0
-        STA     DOSLD|DOSINNMI.W
-        LDA     DOSBANKD|DOSFLASHCURSOR.L
+        STA     DOSINNMI.B
+        LDA     DOSFLASHCURSOR.W
         BEQ     +
+        ACC16
+        JSL     KEYB_INCTIMER.L
         JSL     TEXT_FLASHCUR.L
-+       LDA     DOSBANKD|DOSKEYBBUFL.L
-        CMP     DOSBANKD|DOSKEYBBUFR.L
-        BEQ     @WAI
-        LDA     DOSBANKD|DOSKEYBBUFL.L
++       ACC16
+        ; fill buffer
+        JSR     DOSREADCONKEY.W
+.ACCU 16
+        LDA     DOSKEYBBUFL.W
+        CMP     DOSKEYBBUFR.W
+        BEQ     @LOOP
+@GOTKEY:
+        LDA     DOSKEYBBUFL.W
         TAX
-        LDA     DOSBANKD|DOSKEYBBUF.L,X
+        LDA     DOSKEYBBUF.W,X
+        AND     #$00FF
         INX
         PHA
         TXA
         AND     #$0F
-        STA     DOSBANKD|DOSKEYBBUFL.L
+        STA     DOSKEYBBUFL.W
+        LDA     #$0000
+        STA     DOSIRQCOUNTER.B                 ; IRQ=0, KEYWAIT=0
         PLA
+        EXITDOSRAM
         PLX
         PLY
         CMP     #0
@@ -59,7 +106,7 @@ DOSREADCONLINE:
         DEC     A
         STA     DOSLD|DOSTMP1.L
         LDY     #0
--       JSR     DOSREADCONCHAR
+-       JSR     DOSREADCONCHAR.W
         BEQ     @CR
         ACC8
         CMP     #$08

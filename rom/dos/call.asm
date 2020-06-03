@@ -139,7 +139,7 @@ DOSCALLTABLE:
         .DW     DOSUPDDIRENT.W          ; $32 = update file entry
         .DW     DOSMKDIR.W              ; $33 = create directory
         .DW     DOSUNKFUNC.W            ; $34 = 
-        .DW     DOSUNKFUNC.W            ; $35 = 
+        .DW     DOSGETFREESPACE.W       ; $35 = get free space
         .DW     DOSRMDIR.W              ; $36 = delete (empty) directory
         .DW     DOSMOVEENT.W            ; $37 = move file entry
         .DW     DOSLAUNCH.W             ; $38 = launch program

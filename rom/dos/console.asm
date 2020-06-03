@@ -26,6 +26,14 @@
 
 .INCLUDE "doscomhd.asm"
 
+.DEFINE CONBUF $FA00
+.DEFINE XPATHBUF $FB00
+.DEFINE PATHBUF $FB80
+.DEFINE NAMEBUF $FC00
+.DEFINE EXECBUF $FC10
+.DEFINE FISBUF $FC40
+.DEFINE _sizeof_PATHBUF (NAMEBUF-PATHBUF)
+
 BEGINNING:
 
 DATETIMEQUERY:
@@ -76,6 +84,7 @@ CMDLOOP:
         CMP     #'z'+1
         BCC     @CMDALPHA
 +       
+        ; TODO: handle paths
         ; special characters?
         JSR     COMMAND_UNKNOWN
         
@@ -302,6 +311,88 @@ BIN16TOBCDOFF:
         PLP
         RTS
 
+; input value in WIDENUM1,WIDENUM2. will be modified!
+; output in CMDWIDEBCDBUFFER
+UNPACKWIDEBCD:
+        ACC16
+        PHX
+        PHY
+        CLD
+
+        LDA     #$3030
+        STA     CMDWIDEBCDBUFFER.W
+        STA     CMDWIDEBCDBUFFER+2.W
+        STA     CMDWIDEBCDBUFFER+4.W
+        STA     CMDWIDEBCDBUFFER+6.W
+        STA     CMDWIDEBCDBUFFER+8.W
+
+        LDX     #0
+        LDY     #0
+
+@DIGITLOOP:
+        ; WIDENUM2.WIDENUM1 > POWERSOF10(Y)?
+        LDA     WIDENUM2.W
+        CMP     POWERSOF10+2.W,Y
+        BCC     @NEXTDIGIT
+        BEQ     @TESTLWORD
+        BCS     @SUBTRACT
+@TESTLWORD:
+        LDA     WIDENUM1.W
+        CMP     POWERSOF10.W,Y
+        BCC     @NEXTDIGIT
+
+@SUBTRACT:
+        LDA     WIDENUM1.W
+        SEC
+        SBC     POWERSOF10.W,Y
+        STA     WIDENUM1.W
+        LDA     WIDENUM2.W
+        SBC     POWERSOF10+2.W,Y
+        STA     WIDENUM2.W
+
+        ACC8
+        INC     CMDWIDEBCDBUFFER.W,X
+        ACC16
+        BRA     @DIGITLOOP
+@NEXTDIGIT:
+        LDA     WIDENUM2.W
+        BNE     @NONZERO
+        LDA     WIDENUM1.W
+        BNE     @NONZERO
+        BRA     @RETURN
+@NONZERO:
+        INX
+        INY
+        INY
+        INY
+        INY
+        CPX     #9
+        BCC     @DIGITLOOP
+@FINALDIGIT:
+        ACC8
+        LDA     WIDENUM1.W
+        ORA     #$30
+        STA     CMDWIDEBCDBUFFER.W,X
+        ACC16
+@RETURN:
+        ; remove leading zeroes
+        ACC8
+        LDX     #0
+-       CPX     #9
+        BCS     +
+        LDA     CMDWIDEBCDBUFFER.W,X
+        CMP     #'0'
+        BNE     +
+        LDA     #' '
+        STA     CMDWIDEBCDBUFFER.W,X
+        INX
+        BRA     -
+
++       PLY
+        PLX
+        ACC16
+        RTS
+
 .ACCU 8
 BCD8TOBIN:
         STA     BCDTMP+1.W
@@ -390,6 +481,7 @@ COMMAND_UNKNOWN:
 ; print standard error message
 ; C=1 if disk error
 COMMAND_ERROR:
+        ACC16
         TAX
         LDA     COMMANDERRORMSGTABLEDISK.W,X
         AND     #$FF
@@ -417,6 +509,9 @@ COMMAND_ERROR:
         LDA     #$1900
         DOSCALL
         LSR     ERRTMP.W
+
+        LDA     #$020D
+        DOSCALL
         RTS
 
 .ACCU 8
@@ -483,7 +578,7 @@ CMDFINDRUN:
 
 CMDSEEKRUN:
         ACC16
-        LDA     #$1107
+        LDA     #$1100
         LDX     #NAMEBUF.W
         LDY     #FISBUF.W
         DOSCALL
@@ -497,6 +592,8 @@ CMDSEEKRUN:
         BCS     @ERR
 
 @CHECKFILE
+        BIT     FISBUF-$01.W            ; directory?
+        BVS     +
         LDA     FISBUF+$0C.W
         CMP     #$432E                  ; '.C'
         BNE     +
@@ -558,515 +655,81 @@ CMDFISEXECCOM:
         SEC
         RTS
 
-.ACCU 16
-COMMAND_EXIT:
-        LDA     #$0000
-        DOSCALL
-
-.ACCU 16
-COMMAND_ECHO:
+COMMAND_BUILD_XPATH:
         ACC8
-        LDA     CONBUF.W,X
-        BEQ     @ECHOST
-        LDA     CONBUF+1.W,X
-        BNE     +
-        LDA     CONBUF.W,X
-        CMP     #'.'
-        BEQ     @ECNL
-+       LDA     CONBUF.W,X
-        AND     #$DF
-        CMP     #'O'
-        BEQ     @ECO
-@ECSTD:
-        ACC16
-        TXA
-        CLC
-        ADC     #CONBUF.W
-        TAX
-        LDA     #$1900
-        DOSCALL
-@ECNL:
-        ACC16
-        LDA     #$020D
-        DOSCALL
-        RTS
-.ACCU 8
-@ECO:
-        LDA     CONBUF+1.W,X
-        AND     #$DF
-        CMP     #'N'
-        BEQ     @ECON
-        CMP     #'F'
-        BNE     @ECSTD
-@ECOF:
-        LDA     CONBUF+2.W,X
-        AND     #$DF
-        CMP     #'F'
-        BNE     @ECSTD
-@ECOFF:
-        LDA     CONBUF+3.W,X
-        BNE     @ECSTD
-        BRA     @ECOFF0
-@ECON:
-        LDA     CONBUF+2.W,X
-        BEQ     @ECON0
-        BNE     @ECSTD
-.ACCU 8
-@ECHOST:
-        ACC16
-        LDA     #$1900
-        LDX     #CMDMSGECHO
-        DOSCALL
-
-        LDA     ECHOON.W
-        BNE     +
-        LDX     #CMDMSGECHOTOFF
-        BRA     ++
-+       LDX     #CMDMSGECHOTON
-++      LDA     #$1900
-        DOSCALL
-
-        LDA     #$020D
-        DOSCALL
-
-        RTS
-@ECON0:
-        ACC16
-        LDA     #1
-        STA     ECHOON.W
-        RTS
-@ECOFF0:
-        ACC16
-        LDA     #0
-        STA     ECHOON.W
-        RTS
-
-.ACCU 16
-COMMAND_DATE:
-        LDA     #$2A00
-        DOSCALL
-
-        ACC8
-        JSR     BIN8TOBCD
-        STA     NUMTMP.W
-
-        TXA
-        JSR     BIN8TOBCD
-        STA     NUMTMP+1.W
-
-        ACC16
-        TYA
-        CLC
-        ADC     #1980
-        JSR     BIN16TOBCD
-        STA     NUMTMP+2.W
-
-        ACC8
-        LDA     NUMTMP+1.W
-        LDX     #CMDDATEMSGFMT
-        JSR     UNPACK_BCD8
-        
-        LDA     NUMTMP.W
-        LDX     #CMDDATEMSGFMT.W+3
-        JSR     UNPACK_BCD8
-
-        ACC16
-        LDA     NUMTMP+2.W
-        LDX     #CMDDATEMSGFMT.W+6
-        JSR     UNPACK_BCD16
-
-        LDX     #CMDDATEMSG
-        LDA     #$1900
-        DOSCALL
-
-@LOOP   LDX     #CMDDATEMSGNEW
-        LDA     #$1900
-        DOSCALL
-
-        ; read line to CONBUF
-        LDX     #CONBUF
-        LDY     #256
-        LDA     #$0A00
-        DOSCALL
-
-        CPY     #0
-        BEQ     +
-        ACC8
-        LDA     #0
-        STA     CONBUF.W,Y
-        ACC16
-        LDX     #0
-        JSR     COMMAND_DATE_PARSE.W
-        BCS     @FAIL
-
-@GOT    LDY     #0
-        JSR     COMMANDNUMTMPBCD8TOBIN.W
-        LDY     #1
-        JSR     COMMANDNUMTMPBCD8TOBIN.W
-        LDY     #2
-        JSR     COMMANDNUMTMPBCD16TOBIN.W
-
-        AXY16
-        LDA     NUMTMP+2.W
-        SEC
-        SBC     #1980
-        TAY
-        LDA     #$2B00
-        LDX     #0
-        AXY8
-        LDA     NUMTMP+1.W
-        LDX     NUMTMP.W
-        AXY16
-        DOSCALL
-        BCS     @FAIL
-+       AXY16
-        RTS
-@FAIL   LDA     #$1900
-        LDX     #CMDDATEMSGINVALID
-        DOSCALL
-        BRA     @LOOP
-
-.ACCU 16
-COMMAND_TIME:
-        LDA     #$2C00
-        DOSCALL
-
-        ACC8
-        JSR     BIN8TOBCD
-        STA     NUMTMP.W
-
-        TXA
-        JSR     BIN8TOBCD
-        STA     NUMTMP+1.W
-
-        TYA
-        JSR     BIN8TOBCD
-        STA     NUMTMP+2.W
-
-        LDA     NUMTMP.W
-        CMP     #$12
-        LDA     #'A'
-        BCC     ++
-        LDA     #'P'
-        PHA
-        SED
-        LDA     NUMTMP.W
-        CMP     #$13
-        BCC     +
-        SEC
-        SBC     #$12
-        STA     NUMTMP.W
-+       CLD
-        PLA
-++      STA     CMDTIMEMSGFMT.W+9
-
-        LDA     NUMTMP.W
-        BNE     +
-        LDA     #$12
-+       LDX     #CMDTIMEMSGFMT
-        JSR     UNPACK_BCD8
-        
-        LDA     NUMTMP+1.W
-        LDX     #CMDTIMEMSGFMT.W+3
-        JSR     UNPACK_BCD8
-        
-        LDA     NUMTMP+2.W
-        LDX     #CMDTIMEMSGFMT.W+6
-        JSR     UNPACK_BCD8
-
-        ACC16
-
-        LDX     #CMDTIMEMSG
-        LDA     #$1900
-        DOSCALL
-
-@LOOP   LDX     #CMDTIMEMSGNEW
-        LDA     #$1900
-        DOSCALL
-
-        ; read line to CONBUF
-        LDX     #CONBUF
-        LDY     #256
-        LDA     #$0A00
-        DOSCALL
-
-        CPY     #0
-        BEQ     +
-        ACC8
-        LDA     #0
-        STA     CONBUF.W,Y
-        ACC16
-        LDX     #0
-        JSR     COMMAND_TIME_PARSE.W
-        BCS     @FAIL
-
-@GOT    LDY     #0
-        JSR     COMMANDNUMTMPBCD8TOBIN.W
-        LDY     #1
-        JSR     COMMANDNUMTMPBCD8TOBIN.W
-        LDY     #2
-        JSR     COMMANDNUMTMPBCD8TOBIN.W
-
-        LDA     #$2D00
-        LDX     #0
-        LDY     #0
-        AXY8
-        LDA     NUMTMP.W
-        LDX     NUMTMP+1.W
-        LDY     NUMTMP+2.W
-        AXY16
-        DOSCALL
-        BCS     @FAIL
-+       AXY16
-        RTS
-@FAIL   LDA     #$1900
-        LDX     #CMDTIMEMSGINVALID
-        DOSCALL
-        BRA     @LOOP
-
-COMMANDNUMTMPBCD8TOBIN:
-        PHP
-        ACC8
-        LDA     NUMTMP.W,Y
-        JSR     BCD8TOBIN.W
-        STA     NUMTMP.W,Y
-        PLP
-        RTS
-
-COMMANDNUMTMPBCD16TOBIN:
-        PHP
-        ACC16
-        LDA     NUMTMP.W,Y
-        JSR     BCD16TOBIN.W
-        STA     NUMTMP.W,Y
-        PLP
-        RTS
-
-.ACCU 8
-COMMANDPARSEBCDNUM8P:
-        LDA     CONBUF.W,X
-        CMP     #'0'
-        BCC     COMMANDPARSEBCDNUM8@ERR
-        CMP     #'9'+1
-        BCS     COMMANDPARSEBCDNUM8@ERR
-        INX
-        LDA     CONBUF.W,X
-        CMP     #'0'
-        BCC     @PART
-        CMP     #'9'+1
-        BCS     @PART
-        DEX
-        BRA     COMMANDPARSEBCDNUM8
-
-@PART:
-        DEX
-        LDA     CONBUF.W,X
-        INX
-        AND     #$0F
-        STA     NUMTMP.W,Y
-        INY
-        CLC
-        RTS
-
-.ACCU 8
-COMMANDPARSEBCDNUM8:
-        LDA     CONBUF.W,X
-        CMP     #'0'
-        BCC     @ERR
-        CMP     #'9'+1
-        BCS     @ERR
-        AND     #$0F
-        ASL     A
-        ASL     A
-        ASL     A
-        ASL     A
-        STA     NUMTMP.W,Y
-        INX
-        LDA     CONBUF.W,X
-        CMP     #'0'
-        BCC     @ERR
-        CMP     #'9'+1
-        BCS     @ERR
-        AND     #$0F
-        ORA     NUMTMP.W,Y
-        STA     NUMTMP.W,Y
-        INX
-        INY
-        CLC
-        RTS
-@ERR    SEC
-        RTS
-
-.ACCU 8
-COMMANDPARSEBCDNUM16:
-        JSR     COMMANDPARSEBCDNUM8.W
-        BCS     @ERR
-        JSR     COMMANDPARSEBCDNUM8.W
-        BCS     @ERR
-        CLC
-        RTS
-@ERR    SEC
-        RTS
-
-COMMAND_DATE_EXPECTSLASH:
-        LDA     CONBUF.W,X
-        CMP     #'/'
-        BEQ     +
-        CMP     #'-'
-        BEQ     +
-        SEC
-        RTS
-+       INX
-        CLC
-        RTS
-
-COMMAND_TIME_EXPECTCOLON:
-        LDA     CONBUF.W,X
+        ; does new path start with drive specified? copy it over, else
+        ; use current drive
+        LDA     $0000.W,X
+        BEQ     @STDDRIVE
+        JSR     CMDUPPERCASE.W
+        CMP     #'A'
+        BCC     @STDDRIVE
+        CMP     #'Z'+1
+        BCS     @STDDRIVE
+        LDA     $0001.W,X
         CMP     #':'
-        BEQ     +
-        CMP     #'.'
-        BEQ     +
-        SEC
-        RTS
-+       INX
+        BNE     @STDDRIVE
+        STA     XPATHBUF+1.W
+        LDA     $0000.W,X
+        STA     XPATHBUF.W
+        INX
+        INX
+        BRA     @DRIVEOK
+@STDDRIVE:
+        ACC16
+        LDA     #$3E00
+        DOSCALL
         CLC
-        RTS
+        ADC     #$40
+        ACC8
+        STA     XPATHBUF.W
+        LDA     #':'
+        STA     XPATHBUF+1.W
+@DRIVEOK:
+        LDY     #2
+        LDA     $0000.W,X
+        CMP     #'\'
+        BEQ     @COPYPATH
+        LDA     #'\'
+        STA     XPATHBUF.W,Y
+        INY
+        PHX
+        ACC16
 
+        TYA
+        CLC
+        ADC     #XPATHBUF.W
+        TAX
+        LDA     #$3100
+        DOSCALL
+        PLX
+        ACC8
+
+-       LDA     XPATHBUF.W,Y
+        BEQ     @COPYBS
+        INY
+        BRA     -
+@COPYBS
+        LDA     #'\'
+        STA     XPATHBUF.W,Y
+@COPYPATH
+        LDA     $0000.W,X
+        STA     XPATHBUF.W,Y
+        BEQ     +
+        INX
+        INY
+        BNE     @COPYPATH
++       RTS
+
+.INCLUDE "dos/consolec.asm"
+
+.ACCU 8
 COMMANDPARSESKIPSP:
         DEX
 -       INX
         LDA     CONBUF.W,X
         CMP     #' '
         BEQ     -
-        RTS
-
-COMMAND_DATE_PARSE:
-        ACC8
-        LDY     #0
-        JSR     COMMANDPARSEBCDNUM8P
-        BCS     @ERR
-        JSR     COMMAND_DATE_EXPECTSLASH
-        BCS     @ERR
-        JSR     COMMANDPARSEBCDNUM8P
-        BCS     @ERR
-        JSR     COMMAND_DATE_EXPECTSLASH
-        BCS     @ERR
-        PHX
-        PHY
-        JSR     COMMANDPARSEBCDNUM16
-        BCS     @YEARFAIL
-        PLY
-        PLX
-@ERR    ACC16
-        RTS
-.ACCU 8
-@YEARFAIL:
-        PLY
-        PLX
-        JSR     COMMANDPARSEBCDNUM8
-        BCS     @ERR
-        LDA     NUMTMP-1.W,Y
-        STA     NUMTMP.W,Y
-        CMP     #$80
-        LDA     #$20
-        BCC     +
-        LDA     #$19
-+       STA     NUMTMP-1.W,Y
-        CLC
-        RTS
-
-COMMAND_TIME_PARSE:
-        ACC8
-        
-        LDY     #0
-        JSR     COMMANDPARSEBCDNUM8P
-        BCS     @ERR
-        JSR     COMMAND_TIME_EXPECTCOLON
-        BCS     @ERR
-        JSR     COMMANDPARSEBCDNUM8
-        BCS     @ERR
-        JSR     COMMAND_TIME_EXPECTCOLON
-        BCS     @ERR
-        JSR     COMMANDPARSEBCDNUM8
-        BCS     @ERR
-        JSR     COMMANDPARSESKIPSP
-
-        LDA     CONBUF.W,X
-        BEQ     @MIL
-        CMP     #'A'
-        BEQ     @AM
-        CMP     #'a'
-        BEQ     @AM
-        CMP     #'P'
-        BEQ     @PM
-        CMP     #'p'
-        BEQ     @PM
-        BRA     @ERRC
-
-        CLC
-        ACC16
-        RTS
-@ERRC   SEC
-@ERR    ACC16
-        RTS
-
-.ACCU 8
-@MIL    LDA     NUMTMP.W
-        CMP     #$24
-        BEQ     @AM12
-        BCS     @ERRC
-        CLC
-        ACC16
-        RTS
-
-.ACCU 8
-@AM     INX
-        LDA     CONBUF.W,X
-        CMP     #'M'
-        BEQ     +
-        CMP     #'m'
-        BEQ     +
-        BRA     @ERRC
-+       INX
-        LDA     CONBUF.W,X
-        BNE     @ERRC
-
-        LDA     NUMTMP.W
-        CMP     #$12
-        BEQ     @AM12
-        BCS     @ERRC
-        BRA     +
-@AM12   LDA     #0
-+       STA     NUMTMP.W
-        CLC
-        ACC16
-        RTS
-
-.ACCU 8
-@PM     INX
-        LDA     CONBUF.W,X
-        CMP     #'M'
-        BEQ     +
-        CMP     #'m'
-        BEQ     +
-        BRA     @ERRC
-+       INX
-        LDA     CONBUF.W,X
-        BNE     @ERRC
-
-        LDA     NUMTMP.W
-        CMP     #$12
-        BEQ     @PM12
-        BCS     @ERRC
-        BRA     +
-@PM12   LDA     #0
-+       SED
-        CLC
-        ADC     #$12
-        CLD
-        STA     NUMTMP.W
-        CLC
-        ACC16
         RTS
 
 BCDTMP:
@@ -1084,6 +747,18 @@ ERRTMP:
         .DW     0
 ECHOON:
         .DB     1
+DIRFLAGS:
+        .DW     0
+DIRTOTALFILES:
+        .DW     0
+DIRTMP:
+        .DW     0, 0
+DIRDRIVENUM:
+        .DW     0
+WIDENUM1:
+        .DW     0
+WIDENUM2:
+        .DW     0
 
 BCDTABLEL:
         .DB     $00, $16, $32, $48, $64, $80, $96, $12
@@ -1100,6 +775,14 @@ BCDTABLE1000:
 BCDTABLE1000H:
         .DW     0, 0, 0, 1, 1, 2, 2, 2
         .DW     3, 3, 4, 4, 4, 5, 5, 6
+POWERSOF10:
+.MACRO PO10
+        .DW     (10^\1)&$FFFF
+        .DW     ((10^\1)>>16)&$FFFF
+.ENDM
+.REPEAT 10 INDEX N
+        PO10    9-N
+.ENDR
 
 CONSOLEMESSAGE:
         .DB     13, "Ellipse DOS Console v1.00", 13
@@ -1107,7 +790,7 @@ CONSOLEMESSAGE:
 CMDDATEMSG:
         .DB     "Current system date: "
 CMDDATEMSGFMT:
-        .DB     "$$/$$/$$$$", 13, 0
+        .DB     "$$/$$/$$$$", 0
 CMDDATEMSGNEW:
         .DB     "     Enter new date: ", 0
 CMDDATEMSGINVALID:
@@ -1115,7 +798,7 @@ CMDDATEMSGINVALID:
 CMDTIMEMSG:
         .DB     "Current system time: "
 CMDTIMEMSGFMT:
-        .DB     "$$:$$:$$ $M", 13, 0
+        .DB     "$$:$$:$$ $M", 0
 CMDTIMEMSGNEW:
         .DB     "     Enter new time: ", 0
 CMDTIMEMSGINVALID:
@@ -1127,7 +810,33 @@ CMDMSGECHO:
 CMDMSGECHOTOFF:
         .DB     "OFF.", 0
 CMDMSGECHOTON:
-        .DB     "ON."
+        .DB     "ON.", 0
+COMMANDPAUSEMSG:
+        .DB     "Press any key to continue...", 0
+COMMANDDIRHEADER1:
+        .DB     13, " Volume of drive "
+COMMANDDIRHEADER1_FMT:
+        .DB     "$: is <", 0
+COMMANDDIRHEADER2:
+        .DB     ">", 13, " Directory of  ", 0
+COMMANDDIRHEADER3:
+        .DB     13, 13, 0
+COMMANDDIRFOOTER1:
+        .DB     13, "   ", 0
+COMMANDDIRFOOTER2:
+        .DB     " file(s)    ", 0
+COMMANDDIRFOOTER3
+        .DB     " byte(s) free", 13
+COMMANDDIREMPTY:
+        .DB     0
+DOSDIRMSGSUBDIR:
+        .DB     "<DIR>          ", 0
+DOSMSGDIRSPACE_END:
+        .DB     "                                "
+DOSMSGDIRSPACE:
+        .DB     0
+CMDWIDEBCDBUFFER:
+        .DB     "$$$$$$$$$$", 0
 
 COMMANDMSGERROR_DRIVE:
         .DB     "Drive "
@@ -1173,6 +882,8 @@ COMMANDMSGERROR_15:
         .DB     "Executable cannot fit into memory", 0
 COMMANDMSGERROR_16:
         .DB     "Seek error", 0
+COMMANDMSGERROR_17:
+        .DB     "Cannot create file", 0
 
 COMMANDERRORMSGTABLE:
         .DW     COMMANDMSGERROR_00
@@ -1198,6 +909,7 @@ COMMANDERRORMSGTABLE:
         .DW     COMMANDMSGERROR_14
         .DW     COMMANDMSGERROR_15
         .DW     COMMANDMSGERROR_16
+        .DW     COMMANDMSGERROR_17
 
 COMMANDERRORMSGTABLEDISK:
         .DB     0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0
@@ -1251,11 +963,20 @@ COMMANDFNVALIDCHARS:
 
 COMMANDTABLE_A:
 COMMANDTABLE_B:
+        .DB     0
 COMMANDTABLE_C:
+        .DB     "D", 0
+        .DW     COMMAND_CHDIR
+        .DB     "HDIR", 0
+        .DW     COMMAND_CHDIR
+        .DB     "LS", 0
+        .DW     COMMAND_CLS
         .DB     0
 COMMANDTABLE_D:
         .DB     "ATE", 0
         .DW     COMMAND_DATE
+        .DB     "IR", 0
+        .DW     COMMAND_DIR
         .DB     0
 COMMANDTABLE_E:
         .DB     "CHO", 0
@@ -1273,7 +994,11 @@ COMMANDTABLE_L:
 COMMANDTABLE_M:
 COMMANDTABLE_N:
 COMMANDTABLE_O:
+        .DB     0
 COMMANDTABLE_P:
+        .DB     "AUSE", 0
+        .DW     COMMAND_PAUSE
+        .DB     0
 COMMANDTABLE_Q:
 COMMANDTABLE_R:
 COMMANDTABLE_S:
@@ -1289,28 +1014,3 @@ COMMANDTABLE_X:
 COMMANDTABLE_Y:
 COMMANDTABLE_Z:
         .DB     0
-
-CONBUF:
-.REPEAT 256
-        .DB     0
-.ENDR
-
-PATHBUF:
-.REPEAT 128
-        .DB     0
-.ENDR
-
-NAMEBUF:
-.REPEAT 16
-        .DB     0
-.ENDR
-
-FISBUF:
-.REPEAT 64
-        .DB     0
-.ENDR
-
-EXECBUF:
-.REPEAT 16
-        .DB     0
-.ENDR

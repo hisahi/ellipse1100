@@ -364,7 +364,7 @@ void cpu_instruction_loop(void)
 
         if (breakpoint_enabled)
         {
-            if (regs.PC == breakpoint_addr)
+            if (regs.PC == breakpoint_addr && regs.K == breakpoint_bank)
             {
                 emu_pause_debug();
                 END_CYCLE_NOABORT();

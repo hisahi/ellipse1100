@@ -104,7 +104,7 @@ ELLIPSE LINEAR FILE SYSTEM (ELFS)
             $0C         '.'
             $0D:$0F     extension
             $15:$19     last modified DATETIME
-            $1A:$1D     size in bytes
+            $1A:$1D     size in bytes (not defined for directories)
             $1E:$1F     CADDR to first chunk
 
 ELLIPSE DOS API
@@ -164,15 +164,10 @@ ELLIPSE DOS API
         Close file                          $10
             In:     X=file handle
             Out:    success C=0
-                    failure C=1     A=error
-                        even if fails, handle is no longer valid
+                    failure C=1     A=error     X=0 if handle still valid
+                                                  <>0 if no longer valid
         Find first file with matching name  $11
             In:     B:X=xpathname   B:Y=address to FIB (file index block)
-                    Al=attribute mask; 0 = normal files only
-                                        D----SHR    D=directory
-                                                    S=system
-                                                    H=hidden
-                                                    R=read-only
             Out:    success C=0
                     failure C=1     A=error
         Find next file with matching name   $12
@@ -266,7 +261,7 @@ ELLIPSE DOS API
             Out     success C=0
                     failure C=1     (invalid time)
         Set current directory               $30
-            In      B:X=address to pathname 
+            In      B:X=address to pathname (can include drive specifier)
             Out     success C=0
                     failure C=1     A=error
         Get current directory               $31
@@ -283,6 +278,11 @@ ELLIPSE DOS API
         Delete directory                    $33
             In      B:X=address to dirname
             Out     success C=0
+                    failure C=1     A=error
+        Get free space                      $35
+            In      Al=drive number
+            Out     success C=0     A=free chunk count
+                                    X=log2(bytes per chunk)
                     failure C=1     A=error
         Create directory                    $36
             In      B:X=address to dirname

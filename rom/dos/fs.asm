@@ -246,6 +246,8 @@ DOSLOADFSMB:
         STZ     DOSLOADTRK.B
         LDA     #1
         STA     DOSLOADSECT.B
+        LDA     DOSACTIVEDRIVE.B
+        STA     DOSCACHEDDRIVE.B
         LDX     #FSMBCACHE.W
         JMP     DOSINTRAWLOADSECTOR.W
 
@@ -585,6 +587,41 @@ DOSDIRWRITEBACKRAW:
 +       RTS
 
 ; assumes B=$80 D=DOSPAGE
+; makes sure DOSACTIVEDRIVE is the currently active drive
+; C=1 if error, C=0 if success
+DOSPAGEINACTIVEDRIVE:
+        LDA     DOSACTIVEDRIVE.B
+        CMP     DOSCACHEDDRIVE.B
+        BNE     @DO
+        CLC
+        RTS
+@DO     PHA
+        LDA     DOSCACHEDDRIVE.B
+        STA     DOSACTIVEDRIVE.B
+
+        JSR     DOSFLUSHALLFILES.W
+        BCS     @FAIL
+        JSR     DOSWRITEBACK.W
+        BCS     @FAIL
+        JSR     DOSLOADFSMB.W
+        BCS     @FAIL
+        JSR     DOSVERIFYVOLUME.W
+        BCS     @FAIL
+        JSR     DOSLOADCTABLE.W
+        BCS     @FAIL
+
+        PLA
+        STA     DOSACTIVEDRIVE.B
+        CLC
+        RTS
+
+@FAIL   STA     DOSTMP1.B
+        PLA
+        LDA     DOSTMP1.B
+        SEC
+        RTS
+
+; assumes B=$80 D=DOSPAGE
 ; makes sure DIRCHUNKCACHE contains the chunk in A
 ; C=1 if error, C=0 if success
 DOSPAGEINACTIVEDIR:
@@ -645,9 +682,7 @@ DOSCMPFILENAME:
 @XMUSTBEOVER:
         LDA     DOSSTRINGCACHE,X
         BNE     @COMPDIFF
-        INX
-        INY
-        BRA     @NEXTCHAR
+        BRA     @COMPOK
 @XMUSTBEOVER2:
         LDA     DOSSTRINGCACHE,X
         BNE     @COMPDIFF
@@ -699,9 +734,7 @@ DOSCMPFILENAMEWC:
 @XMUSTBEOVER:
         LDA     DOSSTRINGCACHE,X
         BNE     @COMPDIFF
-        INX
-        INY
-        BRA     @NEXTCHAR
+        BRA     @COMPOK
 @XMUSTBEOVER2:
         LDA     DOSSTRINGCACHE,X
         BNE     @COMPDIFF
@@ -820,7 +853,7 @@ DOSCMPFILENAMESTAR:
 .ACCU 16
 ; assumes B=$80 D=DOSPAGE
 ; path is checked from DOSSTRINGCACHE and may not contain wildcards
-; if file found (C=0), result in DOSNEXTFILEDIR, DOSNEXTFILEOFF
+; if file found (C=0), result in DOSNEXTFILEDRV, *DIR, OFF
 ; else (C=1), A contains error code
 ; $0E = set active drive
 DOSRESOLVEPATHFILE:
@@ -831,7 +864,7 @@ DOSRESOLVEPATHFILE:
 ; name is checked from DOSSTRINGCACHE and may not contain wildcards or
 ;                               path separators (\)
 ; X is offset to that cache
-; if file found (C=0), result in DOSNEXTFILEDIR, DOSNEXTFILEOFF
+; if file found (C=0), result in DOSNEXTFILEDRV, *DIR, OFF
 ; else (C=1), A contains error code
 DOSRESOLVEFILE:
         STZ     DOSPREVDIRCHUNK.B
@@ -854,12 +887,14 @@ DOSRESOLVEFILE:
         CLC
         ADC     #$0020
         TAY
-        CPY     #$0402                  ; end of directory chunk
+        CPY     #$0400                  ; end of directory chunk
         BCC     -
         BRA     @NCH
 @FOUND  LDA     DOSTMP1.B
         AND     #$FFE0
         STA     DOSNEXTFILEOFF.B
+        LDA     DOSACTIVEDRIVE.B
+        STA     DOSNEXTFILEDRV.B
         LDA     DOSCACHEDDIRCH.B
         STA     DOSNEXTFILEDIR.B
         CLC
@@ -882,6 +917,7 @@ DOSRESOLVEFILE:
         LDX     DOSTMP3.B
         BRL     @LDY
 
+.ACCU 8
 ; switch drive according to letter at DOSSTRINGCACHE
 DOSPATHSWITCHDRIVE:
         LDA     DOSSTRINGCACHE
@@ -895,21 +931,14 @@ DOSPATHSWITCHDRIVE:
         CMP     #DOSMAXDRIVES
         BCS     @INVALIDPATH
         ACC16
-        AND     #$00FF
+        AND     #$001F
         STA     DOSACTIVEDRIVE.B
 
         PHX
         PHY
-        JSR     DOSLOADFSMB.W
-        BCS     @FAIL
-        JSR     DOSVERIFYVOLUME.W
-        BCS     @FAIL
-        JSR     DOSLOADCTABLE.W
-        BCS     @FAIL
+        JSR     DOSPAGEINACTIVEDRIVE.W
         PLY
         PLX
-
-        CLC
         RTS
 @INVALIDPATH:
         ACC16
@@ -948,7 +977,9 @@ DOSEXTRACTRESOLVEPATH:
         LDA     DOSSTRINGCACHE.W,X
         CMP     #'\'
         BNE     -
-        STZ     DOSSTRINGCACHE.W,X
+        CPX     #0
+        BEQ     @BS0
+@OK     STZ     DOSSTRINGCACHE.W,X
         ACC16
         INX
         STX     DOSTMP4.B
@@ -959,8 +990,6 @@ DOSEXTRACTRESOLVEPATH:
         LDA     #'\'
         STA     DOSSTRINGCACHE-1.W,X
         ACC16
-        BCS     @RTS                            ; error in DOSRESOLVEPATH_INT
-        CLC
         RTS
 .ACCU 8
 @CLC    LDX     #0
@@ -971,6 +1000,12 @@ DOSEXTRACTRESOLVEPATH:
 +       ACC16
         CLC
 @RTS    RTS
+.ACCU 8
+@BS0    JSR     DOSGOTOROOT.W
+        ACC8
+        BCC     @OK
+@BS0E   ACC16
+        RTS
 
 ; stores length of null-terminated buffer starting at DOSTMP2.B to
 ;                                                     DOSTMP8.B
@@ -981,7 +1016,7 @@ DOSBUFPATHSTRLEN:
         LDX     DOSTMP2.B
 -       ACC8
         LDA     DOSSTRINGCACHE.W,X
-        BNE     +
+        BEQ     +
         INX
         ACC16
         INC     DOSTMP8.B
@@ -992,17 +1027,18 @@ DOSBUFPATHSTRLEN:
 
 ; assumes B=$80 D=DOSPAGE
 DOSMAYBEAPPENDPATH:
+        ACC8
         LDA     DOSUPDATEPATH.B
         BNE     DOSAPPENDPATH
+        ACC16
         CLC
         RTS
 @EMPT   ACC16
         PLA
-        PLP
         CLC
         RTS
+.ACCU 8
 DOSAPPENDPATH:
-        PHP
         JSR     DOSCURPATHTOX.W
         LDA     $0000.W,X
         ACC16
@@ -1027,14 +1063,12 @@ DOSAPPENDPATH:
         CMP     #'.'
         BNE     ++
         LDA     DOSSTRINGCACHE+2.W,X
-        CMP     #'.'
         BNE     ++
         JMP     @REVERSE
 ++      PLX
-        PLP
-        BMI     @BACKSLASH
-        LSR     DOSUPDATEPATH.B
-        BRA     +
+        ; no initial backslash for string
+        LDA     $0000.W,X
+        BEQ     @COPYREST
 @BACKSLASH:
         LDA     $0000.W,X
         CMP     #$7F
@@ -1042,7 +1076,9 @@ DOSAPPENDPATH:
         LDA     #$5C
         STA     $0000.W,Y
         INC     $0000.W,X
-+       JSR     DOSBUFPATHSTRLEN.W
+        INY
+@COPYREST:
+        JSR     DOSBUFPATHSTRLEN.W
         LDA     $0000.W,X
         ACC16
         AND     #$FF
@@ -1050,7 +1086,6 @@ DOSAPPENDPATH:
         ADC     DOSTMP8.B
         CMP     #$7E
         BCS     @PATHTOOLONG
-        DEC     A
         ACC8
         STA     $0000.W,X
         LDX     DOSTMP2.B
@@ -1071,20 +1106,37 @@ DOSAPPENDPATH:
 
 @REVERSE:
         PLX
-        PLP
 .ACCU 8
         ; X = beginning of path string buffer
         ; Y = next character
--       LDA     $0000,Y
+        DEY
+-       LDA     $0000.W,Y
         CMP     #$5C
         BEQ     +
         LDA     #0
-        STA     $0000,Y
+        STA     $0000.W,Y
         DEY
-        DEC     $0000,X
+        DEC     $0000.W,X
         BNE     -
 +       LDA     #0
-        STA     $0000,Y
+        STA     $0000.W,Y
+        CLC
+        RTS
+
+; go to root directory
+DOSGOTOROOT:
+        ACC16
+        LDA     #1
+        STA     DOSACTIVEDIR.B
+        ACC8
+        LDA     DOSUPDATEPATH.B
+        BEQ     +
+        PHX
+        JSR     DOSCURPATHTOX.W
+        STZ     $0000,X
+        STZ     $0001,X
+        PLX
++       ACC16
         CLC
         RTS
 
@@ -1094,12 +1146,9 @@ DOSAPPENDPATH:
 ; if path found (C=0), ACTIVEDIR set to that path
 ; else (C=1), A contains error code
 DOSRESOLVEPATH:
-        LDX     #0
-        DEX
         ACC8
--       INX
-        LDA     DOSSTRINGCACHE.W,X
-        BNE     -
+        LDA     DOSSTRINGCACHE.W
+        BEQ     ++
         LDA     DOSSTRINGCACHE+1.W
         CMP     #':'
         BNE     ++
@@ -1111,42 +1160,32 @@ DOSRESOLVEPATH:
 +       PLP
         BCC     ++
         RTS
-++      ACC16
+++
 DOSRESOLVEPATH_INT:
-        BEQ     @NOPATH
         ACC8
         LDA     DOSSTRINGCACHE.W,X
+        BEQ     @NOPATH
         CMP     #'\'
         BNE     @LOOP
-        ; go to root directory
-        LDA     #2
-        STA     DOSACTIVEDIR.B
-        LDA     DOSUPDATEPATH.B
-        BEQ     +
-        LDA     #$FF
-        STA     DOSUPDATEPATH.B
-        PHX
-        JSR     DOSCURPATHTOX.W
-        STZ     $0000,X
-        STZ     $0001,X
-        PLX
-+       INX
+        JSR     DOSGOTOROOT.W
+        INX
 @LOOP:  ; find next backslash and replace it with '\0'
         STX     DOSTMP2.B
+        STZ     DOSTMP9.B
         LDA     DOSSTRINGCACHE.W,X
         BEQ     @NOPATH
         CMP     #'\'
         BEQ     @BADPATH
 -       INX
         LDA     DOSSTRINGCACHE.W,X
-        BEQ     +
+        BEQ     ++
         CMP     #'\'
         BNE     -
-+       LDA     DOSSTRINGCACHE+1.W,X
-        BEQ     @NOPATH
++       LDA     DOSSTRINGCACHE.W,X
+        STA     DOSTMP9.B
         LDA     #0
         STA     DOSSTRINGCACHE.W,X
-        PHX
+++      PHX
         LDX     DOSTMP2.B                       ; original X value
         ACC16
         JSR     DOSRESOLVEFILE.W
@@ -1155,10 +1194,11 @@ DOSRESOLVEPATH_INT:
         BCS     @FILERESVFAILED
         PLX
         ACC8
-        LDA     #'\'
+        LDA     DOSTMP9.B
         STA     DOSSTRINGCACHE.W,X
+        BEQ     +
         INX
-        STX     DOSTMP2.B                       ; next address
++       STX     DOSTMP2.B                       ; next address
 ; check if file is directory and move into it if so
         ACC16
         LDA     DOSNEXTFILEOFF.B
@@ -1169,7 +1209,7 @@ DOSRESOLVEPATH_INT:
         LDY     #0
         LDA     (DOSTMP5.B),Y
         AND     #$40
-        BNE     @NOTFOLDER                      ; not folder???
+        BEQ     @NOTFOLDER                      ; not folder???
         ACC16
         LDY     #$1E
         LDA     (DOSTMP5.B),Y
@@ -1209,16 +1249,22 @@ DOSRESOLVEPATH_INT:
 ; path is checked from DOSSTRINGCACHE and may contain wildcards, but not
 ;                               path separators (\)
 ; X is offset to that cache
+; DOSNEXTFILEDRV is drive
 ; DOSNEXTFILEDIR is directory (chunk)
 ; DOSNEXTFILEOFF is offset into chunk
 ; else (C=1), A contains error code
 DOSRESOLVENEXTFILE:
         STZ     DOSPREVDIRCHUNK.B
+        LDA     DOSNEXTFILEDRV.B
+        STA     DOSACTIVEDRIVE.B
+        JSR     DOSPAGEINACTIVEDRIVE.W
         LDA     DOSNEXTFILEDIR.B
         JSR     DOSPAGEINACTIVEDIR.W
         BCS     @ERR
         STX     DOSTMP3.B
         LDY     DOSNEXTFILEOFF.B
+        CPY     #$0400.W
+        BCS     @NCH
 -       STY     DOSTMP1.B
         ACC8
         LDA     DIRCHUNKCACHE.W,Y
@@ -1233,12 +1279,14 @@ DOSRESOLVENEXTFILE:
         CLC
         ADC     #$0020
         TAY
-        CPY     #$0402                  ; end of directory chunk
+        CPY     #$0400.W                ; end of directory chunk
         BCC     -
         BRA     @NCH
 @FOUND  LDA     DOSTMP1.B
         AND     #$FFE0
         STA     DOSNEXTFILEOFF.B
+        LDA     DOSACTIVEDRIVE.B
+        STA     DOSNEXTFILEDRV.B
         LDA     DOSCACHEDDIRCH.B
         STA     DOSNEXTFILEDIR.B
         CLC
@@ -1288,6 +1336,7 @@ DOSENDDIRWRITE:
 
 ; X = pointer to current path in bank $80 for currently selected drive
 DOSCURPATHTOX:
+        ACC16
         LDA     DOSACTIVEDRIVE.B
         AND     #$FF
         DEC     A
@@ -1297,6 +1346,7 @@ DOSCURPATHTOX:
         CLC
         ADC     #DOSPATHSTR.W
         TAX
+        ACC8
         RTS
 
 DOSNEXTFREEHANDLESLOT:
@@ -1341,6 +1391,10 @@ DOSALLOWEDTOOPENFILE:
         BNE     @SKIP
         LDA     DOSFILETABLE+$12.W,X
         CMP     DOSNEXTFILEOFF
+        BNE     @SKIP
+        LDA     DOSFILETABLE+$20.W,X
+        AND     #$1F
+        CMP     DOSNEXTFILEDRV
         BNE     @SKIP
         LDA     DOSTMP1.B
         CMP     #1
@@ -1493,9 +1547,50 @@ DOSFLUSHFILE:
         CLC
         RTS
 
+; validate file name at string buffer offset X
+; cache clear if OK, cache set with error if not
+DOSVALIDATEFILENAME:
+        ACC8
+        PHX
+        DEX
+-       INX
+        LDA     DOSSTRINGCACHE.W,X
+        BEQ     +
+        TAX
+        LDA     DOSBANKC|DOSFNVALIDCHARS.L,X
+        BEQ     @ERR
++       PLX
+        ACC16
+        CLC
+        RTS
+@ERR    PLX
+        ACC16
+        LDA     #DOS_ERR_CREATE_ERROR
+        SEC
+        RTS
+
+DOSFNVALIDCHARS:
+        .DB     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        .DB     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        .DB     0,1,0,1,1,1,1,1,1,1,0,0,0,1,0,0
+        .DB     1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0
+        .DB     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+        .DB     1,1,1,1,1,1,1,1,1,1,1,0,0,0,1,1
+        .DB     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+        .DB     1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0
+        .DB     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+        .DB     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+        .DB     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+        .DB     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+        .DB     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+        .DB     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+        .DB     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+        .DB     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+
 ; opens file handle
 ; assumes B=$80 D=DOSPAGE
 ; either DOSFILEDEVICE (=/= 0) contains device number, or
+;       DOSNEXTFILEDRV is drive
 ;       DOSNEXTFILEDIR is directory (chunk)
 ;       DOSNEXTFILEOFF is offset into chunk
 ; X=mode (1=read, 2=write, 3=read/write)
@@ -1514,16 +1609,22 @@ DOSOPENHANDLE:
         JSR     DOSNEXTFREEHANDLESLOT
         BCS     @ERR
 ; import file handle from directory entry
-        LDY     #30
-        TXA
-        CLC
-        ADC     #DOSFILETABLE.W
-        STA     DOSTMP3.B
 
         LDA     DOSNEXTFILEOFF.W
         CLC
         ADC     #DIRCHUNKCACHE
         STA     DOSTMP2.B
+
+        LDY     #0
+        LDA     (DOSTMP2.B),Y
+        AND     #$C0
+        BNE     @SUBDIR         ; cannot open subdirs or deleted files
+
+        LDY     #30
+        TXA
+        CLC
+        ADC     #DOSFILETABLE.W
+        STA     DOSTMP3.B
 
 -       LDA     (DOSTMP2.B),Y
         STA     (DOSTMP3.B),Y
@@ -1545,7 +1646,8 @@ DOSOPENHANDLE:
         LDA     DOSFILETABLE+$1E.W,X
         STA     DOSFILETABLE+$18.W,X
 ; drive number; $FF for current file cache for no cache
-        LDA     DOSACTIVEDRIVE.B
+        LDA     DOSNEXTFILEDRV.B
+        AND     #$001F
         ORA     #$FF00
         STA     DOSFILETABLE+$20.W,X
 ; job ID
@@ -1577,6 +1679,10 @@ DOSOPENHANDLE:
         PLA
 @ERR    SEC
         RTS
+@SUBDIR
+        lDA     #DOS_ERR_ACCESS_DENIED.W
+        SEC
+        RTS
 
 ; return file handle for device according to DOSFILEDEVICE
 DOSOPENHANDLEDEV:
@@ -1603,6 +1709,87 @@ DOSVERIFYHANDLE:
         SEC
         RTS
 
+DOSPACKDATE:
+        ACC16
+        LDA     #$8080
+        STA     DMA1BNKS.L
+        LDA     #6
+        STA     DMA1CNT.L
+        LDA     #DOSDTETMECACHE
+        STA     DMA1SRC.L
+        LDA     #DOSDATEYEAR
+        STA     DMA1DST.L
+
+        ACC8
+        LDA     #$90
+        STA     DOSHALTCLOCK.W
+        STA     DMA1CTRL.L
+        
+-       LDA     DMA1STAT.L
+        BMI     -
+
+        STZ     DOSHALTCLOCK.W
+
+        ; DOSDTETMECACHE: year, month, day, hour, minute, second
+        ACC16
+        STZ     DOSFILEDTCACHE.W
+        STZ     DOSFILEDTCACHE+1.W
+        STZ     DOSFILEDTCACHE+3.W
+        
+        LDA     DOSDTETMECACHE.W                ; year
+        AND     #$FF
+        ASL     A
+        ASL     A
+        XBA
+        TSB     DOSFILEDTCACHE.W
+        
+        LDA     DOSDTETMECACHE+1.W              ; month
+        AND     #$FF
+        XBA
+        LSR     A
+        LSR     A
+        XBA
+        TSB     DOSFILEDTCACHE+1.W
+        
+        LDA     DOSDTETMECACHE+2.W              ; day
+        AND     #$FF
+        ASL     A
+        XBA
+        TSB     DOSFILEDTCACHE+2.W
+        
+        LDA     DOSDTETMECACHE+3.W              ; hour
+        AND     #$FF
+        ASL     A
+        ASL     A
+        ASL     A
+        ASL     A
+        XBA
+        TSB     DOSFILEDTCACHE+2.W
+        
+        LDA     DOSDTETMECACHE+4.W              ; minute
+        AND     #$FF
+        XBA
+        LSR     A
+        XBA
+        TSB     DOSFILEDTCACHE+3.W
+        
+        LDA     DOSDTETMECACHE+4.W              ; second
+        AND     #$FF
+        TSB     DOSFILEDTCACHE+4.W
+
+        LDY     #$15
+        LDA     DOSFILEDTCACHE.W
+        STA     (DOSTMP2.B),Y
+        LDA     DOSFILEDTCACHE+1.W
+        LDY     #$16
+        STA     (DOSTMP2.B),Y
+        LDA     DOSFILEDTCACHE+3.W
+        LDY     #$18
+        STA     (DOSTMP2.B),Y
+
+        ACC16
+        RTS
+
 ; closes file handle and updates directory entry
 ; local file table must be updated afterwards to replace handle with 0
 ; assumes B=$80 D=DOSPAGE
@@ -1615,6 +1802,7 @@ DOSCLOSEHANDLE:
         CPX     #DOSFILETABLE+$0030*OPENFILES
         BCS     @NOCLOSE
         JSR     DOSFLUSHFILE.W
+        BCS     @CLOSEERR0
         PHX
 
 ; maybe update directory entry
@@ -1622,8 +1810,15 @@ DOSCLOSEHANDLE:
         AND     #2
         BEQ     ++
 
+        LDA     DOSFILETABLE+$20.W,X
+        AND     #$FF
+        STA     DOSACTIVEDRIVE.B
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        BCS     @CLOSEERR0
+
         LDA     $0010.W,X
         JSR     DOSPAGEINACTIVEDIR.W
+        BCS     @CLOSEERR0
         LDA     #$FFFF
         STA     DOSADIRDIRTY.B
 
@@ -1644,8 +1839,7 @@ DOSCLOSEHANDLE:
         LDA     $001E.W,X
         STA     (DOSTMP2.B),Y
 
-        ; TODO: current date here
-
+        JSR     DOSPACKDATE.W
 
 ; clear out file entry in global table
         LDA     1,S
@@ -1659,6 +1853,15 @@ DOSCLOSEHANDLE:
         BNE     -
         PLX
 @NOCLOSE:
+        RTS
+
+@CLOSEERR0:
+        LDX     #0
+        SEC
+        RTS
+@CLOSEERR1:
+        LDX     #1
+        SEC
         RTS
 
 ; (pages in file and) hands current cache address in A
@@ -1806,11 +2009,59 @@ DOSFREEMANYCHUNKS:
 @ERR    SEC
         RTS
 
+; A=number of free sectors
+; assumes B=$80 D=DOSPAGE
+DOSCOUNTFREESECTORS:
+        ; TODO: cache result
+        ACC16
+        STZ     DOSTMP7.B
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        BCS     @ERR
+        LDA     DOSCTABLEINRAM.B
+        BNE     DOSCOUNTFREESECTORS@RAM
+@TRYALLCTABLESECS:
+        STZ     DOSTMP6.B
+--      LDA     DOSTMP6.B
+        JSR     DOSCTABLEPARTLOAD.W
+        BCS     +
+-       LDA     CTABLECACHE.W,X
+        BNE     +
+        INC     DOSTMP7.B
++       INX
+        INX
+        CPX     #$0200
+        BCC     -
+        LDA     DOSTMP6.B
+        INC     A
+        STA     DOSTMP6.B
+        CMP     FSMBCACHE+$16.W
+        BCC     --
+        CLC
++       LDA     DOSTMP7.B
+@ERR    RTS
+
+@RAM    LDA     FSMBCACHE+$12.W
+        ASL     A
+        INC     A
+        STA     DOSTMP8.W
+        LDX     #0
+@LOOP   LDA     CTABLECACHE.W,X
+        BNE     +
+        INC     DOSTMP7.B
++       INX
+        INX
+        CPX     DOSTMP8.W
+        BCC     @LOOP
+        LDA     DOSTMP7.B
+        CLC
+        RTS
+
 ; allocates chunk for new files
 ; assumes B=$80 D=DOSPAGE
 ; returns               C=0     A&X=new chunk
 ;                       C=1     A  =error
 DOSALLOCATENEWFILECHUNK:
+        ACC16
         LDA     DOSCTABLEINRAM.B
         BNE     DOSALLOCATENEWFILECHUNKRAM
 
@@ -1846,12 +2097,15 @@ DOSALLOCATENEWFILECHUNK:
 
 DOSALLOCATENEWFILECHUNKRAM:
 DOSALLOCATECHUNKRAM:
+        LDA     FSMBCACHE+$12.W
+        ASL     A
+        INC     A
+        STA     DOSTMP6.W
         LDX     #0
 @LOOP   LDA     CTABLECACHE.W,X
         BEQ     @FOUND
         INX
-        CPX     FSMBCACHE+$12.W
-        BEQ     @LOOP
+        CPX     DOSTMP6.W
         BCC     @LOOP
         LDA     #DOS_ERR_DRIVE_FULL.W
         SEC
@@ -1906,6 +2160,11 @@ DOSALLOCATECHUNK:
 ; C=0 if next chunk available
 ; C=1 if error
 DOSFILENEXTCHUNKWRITE:
+        LDA     $0020.W,X
+        AND     #$FF
+        STA     DOSACTIVEDRIVE.B
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        BCS     @ERRX
         JSR     DOSFLUSHFILE.W
         PHX
         LDA     $0018.W,X
@@ -1920,7 +2179,7 @@ DOSFILENEXTCHUNKWRITE:
         JMP     DOSPAGEINFILENEXTCHUNK.W
 @ERR    PLX
         SEC
-        RTS
+@ERRX   RTS
 @APPEND
         JSR     DOSALLOCATECHUNK.W
         BCS     @ERR
@@ -1953,6 +2212,11 @@ DOSFILENEXTCHUNKWRITE:
 
 ; allocate new chunks for file if necessary
 DOSEXTENDFILE:
+        LDA     $0020.W,X
+        AND     #$FF
+        STA     DOSACTIVEDRIVE.B
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        BCS     @ERRX
         LDA     $0016.W,X
         CMP     $001C.W,X
         BCC     @NO
@@ -1978,6 +2242,80 @@ DOSEXTENDFILE:
         STA     $001C.W,X
         BRA     DOSEXTENDFILE
 @ERR    PLX
+@ERRX   RTS
+
+; go to next chunk, or if none, allocate new chunk for active directory
+DOSEXTENDDIR:
+        LDX     DOSCACHEDDIRCH.B
+        STX     DOSPREVDIRCHUNK.B
+        JSR     DOSNEXTCHUNK.W
+        BCS     @ERR
+        CPX     #$FFFF
+        BEQ     @ALLOC
+        JSR     DOSDIRWRITEBACK.W
+        STX     DOSCACHEDDIRCH.B
+        LDX     #DIRCHUNKCACHE.W
+        JSR     DOSLOADCHUNK.W
+        BCS     @ERR
+        CLC
+@ERR    RTS
+@ALLOC  JSR     DOSALLOCATECHUNK.W
+        BCS     @ERR
+        JSR     DOSDIRWRITEBACK.W
+        STA     DOSCACHEDDIRCH.B
+        LDA     #$FFFF
+        STA     DOSADIRDIRTY.B
+        LDX     #0
+-       STA     DIRCHUNKCACHE.W,X
+        STA     DIRCHUNKCACHE+2.W,X
+        STA     DIRCHUNKCACHE+4.W,X
+        STA     DIRCHUNKCACHE+6.W,X
+        STA     DIRCHUNKCACHE+8.W,X
+        STA     DIRCHUNKCACHE+10.W,X
+        STA     DIRCHUNKCACHE+12.W,X
+        STA     DIRCHUNKCACHE+14.W,X
+        PHA
+        TXA
+        CLC
+        ADC     #$0010
+        TAX
+        PLA
+        CPX     #$0400
+        BCC     -
+        RTS
+
+; find next free position in current active drive and dir
+; C=0 if found, NEXTFILEDRV/DIR/OFF contains pointer
+; C=1 if error
+DOSALLOCDIRSLOT:
+        ACC16
+        STA     DOSACTIVEDRIVE.B
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        BCS     @ERR
+        LDA     DOSACTIVEDIR.B
+        JSR     DOSPAGEINACTIVEDIR.W
+        BCS     @ERR
+--      LDX     #$0000
+-       ACC8
+        LDA     DIRCHUNKCACHE.W,X
+        ACC16
+        BMI     +
+        TXA
+        CLC
+        ADC     #$0020
+        TAX
+        CMP     #$0400
+        BCC     -
+        ; load next chunk
+        JSR     DOSEXTENDDIR.W
+        BCC     --
+@ERR    RTS
++       STX     DOSNEXTFILEOFF.B
+        LDA     DOSCACHEDDIRCH.B
+        STA     DOSNEXTFILEDIR.B
+        LDA     DOSACTIVEDRIVE.B
+        STA     DOSNEXTFILEDRV.B
+        CLC
         RTS
 
 DOSPAGEINFILENEXTCHUNK:
@@ -2209,6 +2547,12 @@ DOSFILEDOTRUNC:
         LDA     $0024.W,X
         AND     #2
         BEQ     @ACC
+
+        LDA     $0020.W,X
+        AND     #$FF
+        STA     DOSACTIVEDRIVE.B
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        BCS     @ERR
 
         ; get next chunk of current chunk
         PHX

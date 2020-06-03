@@ -192,7 +192,7 @@ void io_init(void)
 
 BYTE io_system_status(void)
 {
-    return 0;
+    return e1100_vsys == VS_PAL ? 1 : 0;
 }
 
 BYTE io_read(ADDR p)

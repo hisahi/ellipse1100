@@ -274,10 +274,10 @@ static void floppy_seek(floppy_drive* drive, int write)
     drive->disk_offset = ((drive->side * _FLOPPY_TRACKS + target_track)
                         * floppy_sector_count(drive) + drive->target_sector)
                         * _FLOPPY_SECTOR_SIZE;
-    drive->seek_time = floppy_seek_time_to_track(target_track,
-                                                 drive->track);
-    drive->seek_time += floppy_seek_time_to_sector(drive->target_sector,
-                                                   drive->sector,
+    drive->seek_time = floppy_seek_time_to_track(drive->track,
+                                                 target_track);
+    drive->seek_time += floppy_seek_time_to_sector(drive->sector,
+                                                   drive->target_sector,
                                                    floppy_sector_count(drive));
     drive->sector_offset = 0;
     drive->status = FLOPPY_STATUS_SEEK;
@@ -298,7 +298,7 @@ inline static void floppy_seek_read(floppy_drive* drive)
                 drive->target_track, drive->target_sector);
 #endif
 
-        if (drive->seek_time == 0)
+        if (drive->seek_time <= 0)
             floppy_seek_done(drive);
     }
 }
