@@ -56,13 +56,13 @@ BOOTLOAD:
 @SECTORLOOP:
         ACC16
         LDA     #$0200
-        STA     DMA0CNT
+        STA     DMA1CNT
         LDA     #$7081          ; from $70 to make sure it uses I/O
-        STA     DMA0BNKS
+        STA     DMA1BNKS
         LDA     #FLP1DATA.W
-        STA     DMA0SRC
+        STA     DMA1SRC
         LDA     DOSBOOTTMP.L
-        STA     DMA0DST
+        STA     DMA1DST
         ACC8
 
         STY     FLP1SECT        ; sector, track, side
@@ -77,10 +77,10 @@ BOOTLOAD:
 @SEEKDONE:
         ; read with DMA
         LDA     #$94
-        STA     DMA0CTRL
+        STA     DMA1CTRL
 -       BIT     FLP1STAT
         BVS     @BOOTERROR
-        BIT     DMA0STAT
+        BIT     DMA1STAT
         BMI     -
 
         ACC16

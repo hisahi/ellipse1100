@@ -30,27 +30,30 @@
 ; $0E = set active drive
 DOSSETDRIVE:
         DOSMEMENTER
+        PHX
+        PHY
         PHA
         JSR     DOSPAGEINDIR.W
         PLA
+        AND     #$1F
         BEQ     @BAD
-        CMP     #3
+        CMP     #DOSMAXDRIVES+1
         BCS     @BAD
-        PHX
-        PHY
+        CMP     DOSREALDRIVE.B
+        BEQ     +
         STA     DOSACTIVEDRIVE.B
         JSR     DOSPAGEINACTIVEDRIVE.W
-        PLY
+        BCS     @FAIL
+        JSR     DOSPAGEOUTDRIVE.W
++       PLY
         PLX
-
-        JSR     DOSPAGEOUTDIR.W
-
         DOSMEMEXIT
         CLC
         RTS
 @BAD    LDA     #DOS_ERR_INVALID_DRIVE
 @FAIL   PLY
         PLX
+        DOSMEMEXIT
         SEC
         RTS
 
@@ -67,13 +70,12 @@ DOSPACKFIS:
         LDA     DOSBANKD|DOSSTRINGCACHE+OFF*2.L,X
         STA     $0030+OFF*2,Y
 .ENDR
-        ; TODO: zero out remaining parts of buffer
         PHY
         PHX
         LDA     DOSLD|DOSNEXTFILEOFF.L
         TAX
 -       LDA     DOSBANKD|DIRCHUNKCACHE.L,X
-        STA     $0000,Y
+        STA     $0000.W,Y
         INX
         INX
         INY
@@ -83,28 +85,13 @@ DOSPACKFIS:
         BNE     -
         PLX
         PLY
-        LDA     DOSLD|DOSNEXTFILEDIR.L
-        STA     $0020,Y
-        LDA     DOSLD|DOSNEXTFILEOFF.L
-        STA     $0022,Y
         LDA     DOSLD|DOSNEXTFILEDRV.L
-        STA     $0024,Y
-        RTS
-
-DOSUNPACKFIS:
-.REPEAT 8 INDEX OFF
-        LDA     $0030+OFF*2,Y
-        STA     DOSBANKD|DOSSTRINGCACHE+OFF*2.L
-.ENDR
-        LDA     #0
-        STA     DOSBANKD|DOSSTRINGCACHE+16.L
-        LDA     $0020,Y
-        STA     DOSLD|DOSNEXTFILEDIR.L
-        LDA     $0022,Y
-        STA     DOSLD|DOSNEXTFILEOFF.L
-        LDA     $0024,Y
-        AND     #$1F
-        STA     DOSLD|DOSNEXTFILEDRV.L
+        STA     $0020.W,Y
+        LDA     DOSLD|DOSNEXTFILEDIR.L
+        STA     $0022.W,Y
+        LDA     DOSLD|DOSNEXTFILEOFF.L
+        STA     $0024.W,Y
+@DONE:
         RTS
 
 ; $11 = find first matching file
@@ -119,27 +106,52 @@ DOSFINDFIRST:
         STA     DOSIOBANK.B
         ACC16
         JSR     DOSPAGEINDIR.W
+        LDX     #0
         JSR     DOSEXTRACTRESOLVEPATH.W
         BCS     @ERRM
-        LDA     DOSACTIVEDIR.B
-        STA     DOSNEXTFILEDIR.B
+        PHX
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        BCS     @ERRMX
         LDA     DOSACTIVEDRIVE.B
         STA     DOSNEXTFILEDRV.B
+        LDA     DOSACTIVEDIR.B
+        STA     DOSNEXTFILEDIR.B
         STZ     DOSNEXTFILEOFF.B
+        PLX
         PHX
         JSR     DOSRESOLVENEXTFILE.W
+        BCS     @ERRMX
+        JSR     DOSWIPEBUFFERLEFTOVER.W
         PLX
-        BCS     @ERRM
         EXITDOSRAM
         PLY
         JSR     DOSPACKFIS.W
         PLX
         CLC
         RTS
+@ERRMX  PLX
 @ERRM   EXITDOSRAM
 @ERR    PLY
         PLX
         SEC
+        RTS
+
+DOSUNPACKFIS:
+.REPEAT 8 INDEX OFF
+        LDA     $0030+OFF*2,Y
+        STA     DOSBANKD|DOSSTRINGCACHE+OFF*2.L
+.ENDR
+        LDA     #0
+        STA     DOSBANKD|DOSSTRINGCACHE+16.L
+        LDA     $0020.W,Y
+        AND     #$1F
+        STA     DOSLD|DOSNEXTFILEDRV.L
+        LDA     $0022.W,Y
+        STA     DOSLD|DOSNEXTFILEDIR.L
+        LDA     $0024.W,Y
+        CLC
+        ADC     #$0020
+        STA     DOSLD|DOSNEXTFILEOFF.L
         RTS
 
 ; $12 = find next matching file
@@ -152,15 +164,12 @@ DOSFINDNEXT:
         LDA     #$80
         STA     DOSIOBANK.B
         ACC16
-        JSR     DOSPAGEINDIR.W
         PHX
-        LDA     DOSNEXTFILEOFF.B
-        CLC
-        ADC     #$0020
-        STA     DOSNEXTFILEOFF.B
+        LDX     #0
         JSR     DOSRESOLVENEXTFILE.W
         PLX
         BCS     @ERRM
+        JSR     DOSWIPEBUFFERLEFTOVER.W
         EXITDOSRAM
         PLY
         JSR     DOSPACKFIS.W
@@ -423,18 +432,22 @@ DOSSETDIR:
         JSR     DOSCOPYBXSTRBUFUC.W
         ENTERDOSRAM
         ACC8
-        LDA     DOSACTIVEDRIVE.B
+        LDA     DOSREALDRIVE.B
         STA     DOSTMPX1.B
         LDA     #$80
         STA     DOSIOBANK.B
         LDA     #$FF
         STA     DOSUPDATEPATH.B
+        JSR     DOSSHIFTINPATH.W
+@DBG1
         ACC16
         JSR     DOSPAGEINDIR.W
         LDX     #0
         JSR     DOSRESOLVEPATH.W
         BCS     @ERRM
         JSR     DOSPAGEOUTDIR.W
+        JSR     DOSSHIFTOUTPATH.W
+@DBG2
         LDA     DOSTMPX1.B
         STA     DOSACTIVEDRIVE.B
         STA     DOSREALDRIVE.B

@@ -27,6 +27,11 @@
 DOSINITMISCBUFFERS:
         STZ     DOSSTRINGCACHE.W
         STZ     DOSENVTABLE.W
+        LDX     #DOSPATHSTRSIZE
+-       DEX
+        DEX
+        STZ     DOSPATHSTR.W,X
+        BPL     -
         LDY     #0
 -       LDA     #$FFFF
         STA     DOSFILETABLE.W,Y
@@ -36,13 +41,6 @@ DOSINITMISCBUFFERS:
         TAY
         CPY     #$0400
         BCC     -
-        STZ     DOSPATHSTR.W
-        STZ     DOSPATHSTR+$0100.W
-        STZ     DOSPATHSTR+$0200.W
-        STZ     DOSPATHSTR+$0300.W
-        STZ     DOSPATHSTR+$0400.W
-        STZ     DOSPATHSTR+$0500.W
-        STZ     DOSPATHSTR+$0600.W
         ACC8
         LDA     IOBANK|ERAMBANK.L
         ACC16
@@ -107,6 +105,7 @@ DOSUNALLOCRAMBANK:
 +       RTS
 
 ; copy memory from B:X to string buffer and terminate
+; X contains length
 DOSCOPYBXSTRBUF:
         ACC8
         TXY
@@ -125,6 +124,7 @@ DOSCOPYBXSTRBUF:
         RTS
 
 ; copy memory from B:X to string buffer in uppercase and terminate
+; X contains length
 DOSCOPYBXSTRBUFUC:
         ACC8
         TXY
@@ -140,6 +140,22 @@ DOSCOPYBXSTRBUFUC:
         BRA     -
 +       LDA     #0
         STA     DOSBANKD|DOSSTRINGCACHE.L,X
+        ACC16
+        RTS
+
+; wipe some parts of the buffer after the terminator
+DOSWIPEBUFFERLEFTOVER:
+        ACC8
+        LDX     #0
+        DEX
+-       INX
+        LDA     DOSSTRINGCACHE.W,X
+        BNE     -
+        LDA     #0
+-       INX
+        STA     DOSSTRINGCACHE.W,X
+        CPX     #17
+        BCC     -
         ACC16
         RTS
 

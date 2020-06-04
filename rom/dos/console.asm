@@ -30,8 +30,8 @@
 .DEFINE XPATHBUF $FB00
 .DEFINE PATHBUF $FB80
 .DEFINE NAMEBUF $FC00
-.DEFINE EXECBUF $FC10
-.DEFINE FISBUF $FC40
+.DEFINE EXECBUF $FC80
+.DEFINE FISBUF $FD00
 .DEFINE _sizeof_PATHBUF (NAMEBUF-PATHBUF)
 
 BEGINNING:
@@ -75,6 +75,23 @@ CMDLOOP:
         LDA     CONBUF.W
         BEQ     @NOCMD
 
+        ; A: - Z:
+        LDA     CONBUF+1.W
+        CMP     #':'
+        BNE     ++
+        LDA     CONBUF+2.W
+        BNE     ++
+        LDA     CONBUF.W
+        CMP     #'A'
+        BCC     ++
+        CMP     #'Z'+1
+        BCC     @SWITCHDRIVE
++       CMP     #'a'
+        BCC     ++
+        CMP     #'z'+1
+        BCC     @SWITCHDRIVE
+++   
+        LDA     CONBUF.W
         CMP     #'A'
         BCC     +
         CMP     #'Z'+1
@@ -84,12 +101,26 @@ CMDLOOP:
         CMP     #'z'+1
         BCC     @CMDALPHA
 +       
-        ; TODO: handle paths
-        ; special characters?
+        LDA     CONBUF.W
+        CMP     #'\'
+        BEQ     @CMDBS
+
         JSR     COMMAND_UNKNOWN
         
 @NOCMD  ACC16
         JMP     CMDLOOP
+
+@SWITCHDRIVE
+        JSR     CMDUPPERCASE.W
+        JSR     CMDSWITCHDRIVE.W
+        ACC16
+        JMP     CMDLOOP
+
+@CMDBS
+        JSR     CMDVALIDPATHFN.W
+        BCS     +
+        JSR     CMDSEEKRUN.W
++       BRA     @CMDOK
 
 .ACCU 8
 @CMDALPHA
@@ -105,7 +136,7 @@ CMDLOOP:
         LDY     #1
         JSR     CMDFINDRUN.W
         BCC     @CMDOK
-        JSR     CMDVALIDFN.W
+        JSR     CMDVALIDPATHFN.W
         BCS     +
         JSR     CMDSEEKRUN.W
         BCC     @CMDOK
@@ -217,6 +248,100 @@ CMDVALIDFN:
         INX
         INY
         BRA     @LOOP
+
+; same as above, but allows paths and pushes to PATHBUF
+CMDVALIDPATHFN:
+        ACC16
+        LDA     #0
+        ACC8
+        LDX     #0
+        LDY     #0
+        STZ     EXECTMP+2.W             ; got ext?
+@LOOP   CPY     #15
+        BCS     @INVALID
+        LDA     CONBUF.W,X
+        BEQ     @ENDFN
+        CMP     #' '
+        BEQ     @ENDFN
+        CMP     #'/'
+        BEQ     @ENDFN
+        CMP     #':'
+        BEQ     @COLON
+        CMP     #'\'
+        BEQ     @BS
+        CMP     #'.'
+        BEQ     @EXT
+        PHX
+        TAX
+        LDA     COMMANDFNVALIDCHARS.W,X
+        PLX
+        CMP     #0
+        BNE     @VALIDCH
+@INVALID
+        SEC
+        ACC16
+        RTS
+.ACCU 8
+@COLON  CPX     #1
+        BNE     @ENDFN
+.ACCU 8
+@VALIDCH
+        LDA     CONBUF.W,X
+        JSR     CMDUPPERCASE.W
+        STA     PATHBUF.W,Y
+        INX
+        INY
+        BRA     @LOOP
+@ENDFN  LDA     EXECTMP+2.W
+        BEQ     @ENDEXT
+@ENDFNZ
+        LDA     #0
+        STA     PATHBUF.W,Y
+        LDA     CONBUF.W,X
+        CMP     #' '
+        BNE     +
+        INX
++       STX     EXECTMP.W
+        ACC16
+        CLC
+        RTS
+.ACCU 8
+@BS     STZ     EXECTMP+2.W             ; got ext?
+        BRA     @VALIDCH
+.ACCU 8
+@ENDEXT
+        CPY     #11
+        BCS     @INVALID
+        LDA     #'.'
+        STA     PATHBUF.W,Y
+        INY
+        LDA     #'*'
+        STA     PATHBUF.W,Y
+        INY
+        BRA     @ENDFNZ
+.ACCU 8
+@EXT    LDA     EXECTMP+2.W
+        BNE     @ENDFNZ
+        INC     EXECTMP+2.W
+        LDA     CONBUF.W,X
+        STA     PATHBUF.W,Y
+        INX
+        INY
+        JMP     @LOOP
+
+.ACCu 8
+CMDSWITCHDRIVE:
+        SEC
+        SBC     #'@'
+        ACC16
+        AND     #$1F
+        ORA     #$0E00
+        DOSCALL
+        BCC     +
+        JSR     COMMAND_ERROR
++       LDA     #$020D
+        DOSCALL
+        RTS
 
 .ACCU 8
 BIN8TOBCD:
@@ -489,8 +614,7 @@ COMMAND_ERROR:
         BEQ     +
 
         PHX
-        LDA     #$3E00
-        DOSCALL
+        LDA     $804020.L       ; DOSACTIVEDRIVE
         CLC
         ADC     #$0040
         ACC8
@@ -579,8 +703,9 @@ CMDFINDRUN:
 CMDSEEKRUN:
         ACC16
         LDA     #$1100
-        LDX     #NAMEBUF.W
+        LDX     #PATHBUF.W
         LDY     #FISBUF.W
+@DBG
         DOSCALL
         BCS     @ERR
         BRA     @CHECKFILE
@@ -615,26 +740,53 @@ CMDSEEKRUN:
         RTS
 
 CMDFISCOPYFN:
+        LDY     #NAMEBUF.W
+CMDFISCOPYFN_INT:
         ACC8
         LDX     #0
-        LDY     #0
 @LOOP
         CPX     #$0E
         BCS     @EXIT
         LDA     FISBUF+$02.W,X
         CMP     #' '
         BEQ     @PAD
-        STA     NAMEBUF.W,Y
+        STA     $0000.W,Y
         INY
 @PAD    INX
         BRA     @LOOP
 @EXIT
+        LDA     #0
+        STA     $0000.W,Y
         ACC16
         RTS
 
+CMDFISCOPYPATHFN:
+        LDY     #PATHBUF.W
+        JSR     CMDMVYENDOFPATH
+        BRA     CMDFISCOPYFN_INT
+
+CMDMVYENDOFPATH:
+        ACC8
+        DEY
+-       INY
+        LDA     $0000.W,Y
+        BNE     -
+-       DEY
+        LDA     $0000.W,Y
+        CMP     #'\'
+        BEQ     @BS
+        CPY     #PATHBUF.W+1
+        BCS     -
+        LDA     $0001.W,Y
+        CMP     #':'
+        BNE     +
+        INY
+@BS     INY
++       RTS
+
 .ACCU 16
 CMDFISEXECCOM:
-        JSR     CMDFISCOPYFN.W
+        JSR     CMDFISCOPYPATHFN.W
 
         LDA     EXECTMP.W
         CLC
@@ -644,7 +796,7 @@ CMDFISEXECCOM:
         STZ     EXECBUF+2.W
 
         LDA     #$3800
-        LDX     #NAMEBUF.W
+        LDX     #PATHBUF.W
         LDY     #EXECBUF.W
         DOSCALL
 
@@ -657,6 +809,10 @@ CMDFISEXECCOM:
 
 COMMAND_BUILD_XPATH:
         ACC8
+        LDA     NAMEBUF.W  
+        PHA
+        LDA     #0
+        STA     NAMEBUF.W
         ; does new path start with drive specified? copy it over, else
         ; use current drive
         LDA     $0000.W,X
@@ -719,7 +875,9 @@ COMMAND_BUILD_XPATH:
         INX
         INY
         BNE     @COPYPATH
-+       RTS
++       PLA
+        STA     NAMEBUF.W
+        RTS
 
 .INCLUDE "dos/consolec.asm"
 
@@ -754,6 +912,8 @@ DIRTOTALFILES:
 DIRTMP:
         .DW     0, 0
 DIRDRIVENUM:
+        .DW     0
+DIROLDDRIVE:
         .DW     0
 WIDENUM1:
         .DW     0
@@ -805,6 +965,8 @@ CMDTIMEMSGINVALID:
         .DB     "Invalid time", 13, 0
 CMDUNKNOWN:
         .DB     "Command or file not found", 13, 0
+CMDRMDIRFAIL:
+        .DB     "Cannot create file", 13, 0
 CMDMSGECHO:
         .DB     "ECHO is ", 0
 CMDMSGECHOTOFF:

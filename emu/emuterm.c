@@ -182,9 +182,9 @@ void emu_term_do_line(const char* buf, size_t buflen)
                 f2wp = file_is_readonly(drive1fn);
                 strncpy(drive1fn, buf + tok0len + 1, MAX_PATH_NAME + 1);
                 if (!floppy_mount(1, fp, f2wp))
-                    printf("Mounted floppy to drive I\n");
+                    printf("Mounted floppy to drive II\n");
                 else
-                    printf("Could not mount floppy drive I\n"
+                    printf("Could not mount floppy drive II\n"
                            "(wrong size? must be 960, 1280 or 1600 KB)\n");
             }
             else

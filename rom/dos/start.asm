@@ -68,6 +68,7 @@ DOSSTART:
         STZ     DOSDATEMONTH.B  ;+     DOSDATEDAY.B
         STZ     DOSDATEHOUR.B   ;+  DOSDATEMINUTE.B
         STZ     DOSDATESECOND.B ;+    DOSDATETICK.B
+        STZ     DOSOLDTEXTDMA1.B
         
         LDA     #$0001
         STA     DOSFLASHCURSOR.W
@@ -78,12 +79,6 @@ DOSSTART:
         CPX     #14
         BCC     -
         STA     DOSACTIVEDIR.W
-
-        LDX     #DOSPATHSTRSIZE
--       DEX
-        DEX
-        STZ     DOSPATHSTR.W,X
-        BNE     -
 
         LDA     #$01
         STA     DOSACTIVEDRIVE.B
@@ -109,6 +104,10 @@ DOSSTART:
         STA     IOBANK|EINTGNRC.L
         LDA     #$06
         STA     IOBANK|VPUCNTRL.L
+
+        LDA     #$FF
+        STA     DOSOLDTEXTDMA1.B
+        FREEDMA1
 
         LDA     #$1234
         STA     $801234.L

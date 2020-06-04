@@ -30,6 +30,8 @@
 ; assumes B=$80 D=DOSPAGE
 ; X=where to load to
 DOSINTRAWLOADSECTOR:
+        RESERVEDMA1
+.ACCU 16
         TXA
         STA     DMA1DST.L
         LDA     #$0200
@@ -46,11 +48,15 @@ DOSINTRAWLOADSECTOR:
         BCS     DOSRTSINVALIDDRIVE
         ASL     A
         TAX
-        JMP     (DOSINTRAWLOADSECTORDRIVES.W,X)
+        JSR     (DOSINTRAWLOADSECTORDRIVES.W,X)
+        FREEDMA1
+        RTS
 
 ; assumes B=$80 D=DOSPAGE
 ; X=where to load to
 DOSINTRAWSTORESECTOR:
+        RESERVEDMA1
+.ACCU 16
         TXA
         STA     DMA1SRC.L
         LDA     #$0200
@@ -67,7 +73,9 @@ DOSINTRAWSTORESECTOR:
         BCS     DOSRTSINVALIDDRIVE
         ASL     A
         TAX
-        JMP     (DOSINTRAWSTORESECTORDRIVES.W,X)
+        JSR     (DOSINTRAWSTORESECTORDRIVES.W,X)
+        FREEDMA1
+        RTS
 
 DOSRTSINVALIDDRIVE:
         DOS_RETURN_ERROR     DOS_ERR_INVALID_DRIVE
@@ -118,9 +126,11 @@ DOSINTRAWLOADSECTOR_FLOPPY:
         CLC
         RTS
 @ERROR  STZ     DMA1CTRL.W
-        LDX     FLP1DATA.W
-        LDA     DOSLC|DOSERRORCODES_FLOPPY.L,X
+        LDA     FLP1DATA.W,X
         ACC16
+        AND     #$FF
+        TAX
+        LDA     DOSLC|DOSERRORCODES_FLOPPY.L,X
         AND     #$FF
         SEC
         PLB
@@ -438,17 +448,26 @@ DOSPAGEINDIR:
         RTS
 
 ; assumes B=$80 D=DOSPAGE
-; save actual current drive/disk back
+; save actual current drive back
+; destroys A
+DOSPAGEOUTDRIVE:
+        LDA     DOSACTIVEDRIVE.B
+        STA     DOSREALDRIVE.B
+        RTS
+
+; assumes B=$80 D=DOSPAGE
+; save actual current dir back
 ; destroys A
 DOSPAGEOUTDIR:
         PHX
         LDA     DOSACTIVEDRIVE.B
-        STA     DOSREALDRIVE.B
         DEC     A
         ASL     A
         TAX
         LDA     DOSACTIVEDIR.B
         STA     DOSDRIVEDIRS.B,X
+        LDA     DOSREALDRIVE.B
+        STA     DOSACTIVEDRIVE.B
         PLX
         RTS
 
@@ -492,7 +511,7 @@ DOSCTABLEPARTWRITEBACK:
 +       RTS
 
 ; write back full ctable
-DOSCTABLEWRITEBACK:
+DOSCTABLEWRITEBACKRAW:
         LDA     DOSCTABLEINRAM.B
         BEQ     DOSCTABLEPARTWRITEBACK
         LDA     DOSCTABLEDIRTY.B
@@ -503,6 +522,18 @@ DOSCTABLEWRITEBACK:
         JSR     DOSSTORECTABLE.W
         PLY
         PLX
++       RTS
+
+; write back full ctable
+DOSCTABLEWRITEBACK:
+        LDA     DOSCTABLEINRAM.B
+        BEQ     DOSCTABLEPARTWRITEBACK
+        LDA     DOSCTABLEDIRTY.B
+        BEQ     +
+        STZ     DOSCTABLEDIRTY.B
+        JSR     DOSSTARTDIRWRITE.B
+        JSR     DOSDIRWRITEBACKRAW.W
+        JSR     DOSENDDIRWRITE.B
 +       RTS
 
 ; assumes B=$80 D=DOSPAGE
@@ -521,7 +552,7 @@ DOSWRITEBACK:
         ORA     DOSADIRDIRTY.B
         BEQ     +
         JSR     DOSSTARTDIRWRITE.B
-        JSR     DOSCTABLEWRITEBACK.W
+        JSR     DOSCTABLEWRITEBACKRAW.W
         JSR     DOSDIRWRITEBACKRAW.W
         JSR     DOSENDDIRWRITE.B
 +       RTS
@@ -603,22 +634,42 @@ DOSPAGEINACTIVEDRIVE:
         BCS     @FAIL
         JSR     DOSWRITEBACK.W
         BCS     @FAIL
-        JSR     DOSLOADFSMB.W
-        BCS     @FAIL
-        JSR     DOSVERIFYVOLUME.W
-        BCS     @FAIL
-        JSR     DOSLOADCTABLE.W
-        BCS     @FAIL
+        ; since we write back the directory above, we can
+        ; invalidate dir chunk cache
+        STZ     DOSCACHEDDIRCH.B
+        ; same with ctable cache
+        STZ     DOSCTBLCACHSECT.B
+        STZ     DOSCTABLEDIRTY.B
 
         PLA
         STA     DOSACTIVEDRIVE.B
+
+@POST
+        JSR     DOSLOADFSMB.W
+        BCS     @FAIL2
+        JSR     DOSVERIFYVOLUME.W
+        BCS     @FAIL2
+        JSR     DOSLOADCTABLE.W
+        BCS     @FAIL2
+
+@ALLOK
+        ; get current directory of new drive
+        LDA     DOSACTIVEDRIVE.B
+        DEC     A
+        ASL     A
+        TAX
+        LDA     DOSDRIVEDIRS.B,X
+        STA     DOSACTIVEDIR.B
+
         CLC
         RTS
 
-@FAIL   STA     DOSTMP1.B
+@FAIL   STA     1,S
         PLA
-        LDA     DOSTMP1.B
         SEC
+        RTS
+
+@FAIL2  SEC
         RTS
 
 ; assumes B=$80 D=DOSPAGE
@@ -627,21 +678,26 @@ DOSPAGEINACTIVEDRIVE:
 DOSPAGEINACTIVEDIR:
         CMP     DOSCACHEDDIRCH.B
         BEQ     +
-        STA     DOSCACHEDDIRCH.B
+        ACC16
+        PHA
         JSR     DOSDIRWRITEBACK.W
+        ACC16
+        PLA
+        ;BCS     @FAIL2
+        STA     DOSCACHEDDIRCH.B
         PHX
         LDX     #DIRCHUNKCACHE.W
         PHY
         LDY     DOSCACHEDDIRCH.B
-        JSR     DOSLOADCHUNK.W
+@LOAD   JSR     DOSLOADCHUNK.W
         BCS     @FAIL
         PLY
         PLX
 +       CLC
         RTS
-@FAIL   STZ     DOSCACHEDDIRCH.B
-        PLY
+@FAIL   PLY
         PLX
+@FAIL2  STZ     DOSCACHEDDIRCH.B
 +       SEC
         RTS
 
@@ -868,6 +924,7 @@ DOSRESOLVEPATHFILE:
 ; else (C=1), A contains error code
 DOSRESOLVEFILE:
         STZ     DOSPREVDIRCHUNK.B
+        JSR     DOSPAGEINACTIVEDRIVE.W
         LDA     DOSACTIVEDIR.B
         JSR     DOSPAGEINACTIVEDIR.W
         BCS     @ERR
@@ -920,7 +977,7 @@ DOSRESOLVEFILE:
 .ACCU 8
 ; switch drive according to letter at DOSSTRINGCACHE
 DOSPATHSWITCHDRIVE:
-        LDA     DOSSTRINGCACHE
+        LDA     DOSSTRINGCACHE.W
         AND     #$DF
         CMP     #'A'
         BCC     @INVALIDPATH
@@ -928,7 +985,7 @@ DOSPATHSWITCHDRIVE:
         BCS     @INVALIDPATH
         SEC
         SBC     #'A'-1
-        CMP     #DOSMAXDRIVES
+        CMP     #DOSMAXDRIVES+1
         BCS     @INVALIDPATH
         ACC16
         AND     #$001F
@@ -986,13 +1043,17 @@ DOSEXTRACTRESOLVEPATH:
         LDX     DOSTMP3.B
         JSR     DOSRESOLVEPATH_INT
         ACC8
+        PHA
         LDX     DOSTMP4.B
         LDA     #'\'
         STA     DOSSTRINGCACHE-1.W,X
+        PLA
         ACC16
         RTS
 .ACCU 8
 @CLC    LDX     #0
+        LDA     DOSSTRINGCACHE.W
+        BEQ     +
         LDA     DOSSTRINGCACHE+1.W
         CMP     #':'
         BNE     +
@@ -1002,9 +1063,42 @@ DOSEXTRACTRESOLVEPATH:
 @RTS    RTS
 .ACCU 8
 @BS0    JSR     DOSGOTOROOT.W
-        ACC8
         BCC     @OK
 @BS0E   ACC16
+        RTS
+
+; copy current drive path to DOSPATHBUF
+DOSSHIFTINPATH:
+        ACC8
+        JSR     DOSCURPATHTOX.W
+        LDY     #DOSPATHBUF.W
+        BRA     DOSCOPYPATHXY.W
+        
+; copy current drive path to DOSPATHBUF
+DOSSHIFTOUTPATH:
+        ACC8
+        JSR     DOSCURPATHTOX.W
+        TXY
+        LDX     #DOSPATHBUF.W
+        JMP     DOSCOPYPATHXY.W
+
+; copy path from X to Y
+; uses A, X, Y, DOSTMP8
+DOSCOPYPATHXY:
+        LDA     $0000.W,X
+        STA     $0000.W,Y
+        STA     DOSTMP8.B
+        LDA     DOSTMP8.B
+-       BEQ     +
+        INX
+        INY
+        LDA     $0000.W,X
+        STA     $0000.W,Y
+        DEC     DOSTMP8.B
+        BRA     -
++       LDA     #0
+        STA     $0001.W,Y
+        ACC16
         RTS
 
 ; stores length of null-terminated buffer starting at DOSTMP2.B to
@@ -1039,9 +1133,9 @@ DOSMAYBEAPPENDPATH:
         RTS
 .ACCU 8
 DOSAPPENDPATH:
-        JSR     DOSCURPATHTOX.W
-        LDA     $0000.W,X
         ACC16
+        LDX     #DOSPATHBUF.W
+        LDA     $0000.W,X
         AND     #$FF
         PHX
         CLC
@@ -1132,11 +1226,9 @@ DOSGOTOROOT:
         LDA     DOSUPDATEPATH.B
         BEQ     +
         PHX
-        JSR     DOSCURPATHTOX.W
-        STZ     $0000,X
-        STZ     $0001,X
+        STZ     DOSPATHBUF.W
         PLX
-+       ACC16
++       ACC8
         CLC
         RTS
 
@@ -1254,6 +1346,7 @@ DOSRESOLVEPATH_INT:
 ; DOSNEXTFILEOFF is offset into chunk
 ; else (C=1), A contains error code
 DOSRESOLVENEXTFILE:
+        STX     DOSTMP3.B
         STZ     DOSPREVDIRCHUNK.B
         LDA     DOSNEXTFILEDRV.B
         STA     DOSACTIVEDRIVE.B
@@ -1261,7 +1354,6 @@ DOSRESOLVENEXTFILE:
         LDA     DOSNEXTFILEDIR.B
         JSR     DOSPAGEINACTIVEDIR.W
         BCS     @ERR
-        STX     DOSTMP3.B
         LDY     DOSNEXTFILEOFF.B
         CPY     #$0400.W
         BCS     @NCH
@@ -1422,8 +1514,8 @@ DOSALLOWEDTOOPENFILE:
 DOSFLUSHALLFILES:
         LDX     #DOSFILETABLE.W
         LDY     #OPENFILES
-        ACC8
--       LDA     $0000.W,X
+-       ACC8
+        LDA     $0000.W,X
         BMI     @SKIP
         LDA     $0024.W,X
         AND     #$FF
@@ -1432,7 +1524,11 @@ DOSFLUSHALLFILES:
         LDA     $0021.W,X
         BPL     @SKIP
         ACC16
+        PHX
+        PHY
         JSR     DOSFLUSHFILE.W
+        PLY
+        PLX
 @SKIP   ACC16
         TXA
         CLC
@@ -1525,8 +1621,11 @@ DOSEVICTFILE:
 ; assumes B=$80 D=DOSPAGE
 ; X=handle
 DOSFLUSHFILE:
+        LDA     $0000.W,X
+        AND     #$0080
+        BNE     @RET
         LDA     $0024.W,X
-        AND     #$FF
+        AND     #$00FF
         CMP     #1
         BEQ     @RET
         ACC8
@@ -1710,6 +1809,8 @@ DOSVERIFYHANDLE:
         RTS
 
 DOSPACKDATE:
+        RESERVEDMA1
+
         ACC16
         LDA     #$8080
         STA     DMA1BNKS.L
@@ -1728,6 +1829,9 @@ DOSPACKDATE:
 -       LDA     DMA1STAT.L
         BMI     -
 
+        FREEDMA1
+
+        ACC8
         STZ     DOSHALTCLOCK.W
 
         ; DOSDTETMECACHE: year, month, day, hour, minute, second
@@ -2364,6 +2468,8 @@ DOSFILEREADCYCLE:
         LDX     DOSTMPX3.B
         JSR     DOSPAGEINFILE.W
         BCS     +
+        RESERVEDMA1
+.ACCU 16
         LDX     DOSTMPX3.B
         LDA     DOSTMPX2.B
         STA     DMA1DST.L
@@ -2379,10 +2485,11 @@ DOSFILEREADCYCLE:
         STA     DMA1CNT.L
         LDA     DOSTMPX4.B
         STA     DMA1BNKS.L
--       BIT     DMA1STAT.W
+-       LDA     DMA1STAT.L
         BMI     -
         LDA     DMA1DST.L
         STA     DOSTMPX2.B
+        FREEDMA1
         LDA     DOSTMPX5.B
         CLC
         ADC     $0014.W,X
@@ -2395,15 +2502,15 @@ DOSFILEREADCYCLE:
         AND     #$0400
         BNE     @NEXTCH
 +       RTS
+@NEGOFFSET:
+        LDA     #DOS_ERR_READ_ERROR
+        SEC
+        RTS
 @ZERO   CLC
         RTS
 @NEXTCH:
         LDX     DOSTMPX3.B
         JSR     DOSFILENEXTCHUNKREAD.W
-        RTS
-@NEGOFFSET:
-        LDA     #DOS_ERR_READ_ERROR
-        SEC
         RTS
 
 ; used for Ah=$22
@@ -2414,12 +2521,14 @@ DOSFILEREADCYCLE:
 ; C=1 if error
 DOSFILEWRITECYCLE:
         BIT     $0016.W,X
-        BMI     DOSFILEWRITECYCLE@NEGOFFSET
+        BMI     @NEGOFFSET
         LDX     DOSTMPX3.B
         JSR     DOSEXTENDFILE.W
         LDX     DOSTMPX3.B
         CMP     DOSTMPX5.B
         BEQ     @ZERO
+        RESERVEDMA1
+.ACCU 16
         LDA     DOSTMPX2.B
         STA     DMA1SRC.L
         LDA     $0014.W,X
@@ -2438,6 +2547,15 @@ DOSFILEWRITECYCLE:
         BMI     -
         LDA     DMA1DST.L
         STA     DOSTMPX2.B
+        FREEDMA1
+        BRA     @WRITEOK
+@NEGOFFSET:
+        LDA     #DOS_ERR_WRITE_ERROR
+        SEC
+        RTS
+@ZERO   CLC
+        RTS
+@WRITEOK:
         LDA     DOSTMPX5.B
         CLC
         ADC     $0014.W,X
@@ -2462,15 +2580,9 @@ DOSFILEWRITECYCLE:
         AND     #$0400
         BNE     @NEXTCH
         RTS
-@ZERO   CLC
-        RTS
 @NEXTCH:
         LDX     DOSTMPX3.B
         JSR     DOSFILENEXTCHUNKWRITE.W
-        RTS
-@NEGOFFSET:
-        LDA     #DOS_ERR_WRITE_ERROR
-        SEC
         RTS
 
 ; do file seeking

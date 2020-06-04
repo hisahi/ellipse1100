@@ -86,6 +86,9 @@ ALMOSTRESET:
         PHA
         PLB
         
+        ; do not allow FIXTEXT to use DMA1
+        STZ     TEXT_USEDMA1.W
+        
         ; set text mode background color background color
         LDA     #BOOT_BACKGROUND_COLOR.b
         STA     $FFFF&TEXT_BGCOLOR.w

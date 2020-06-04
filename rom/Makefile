@@ -43,12 +43,17 @@ dos/console.obj: dos/console.asm dos/consolec.asm
 	$(AS) $(AFLAGS) -o $@ $<
 CONSOLE.COM: dos/console.obj
 	$(LD) $(LDFLAGS) -b console.lnk $@
+	
+floppies/elfsdisk.obj: floppies/elfsdisk.asm
+	$(AS) $(AFLAGS) -o $@ $<
 
+elfsdisk.img: makeelfs floppies/elfsdisk.obj floppies/elfsdisk.fs
+	$(LD) $(LDFLAGS) elfsdisk.lnk $@ && ./makeelfs elfsdisk.img floppies/elfsdisk.fs
 edos.img: makeelfs DOS.SYS CONSOLE.COM HELLO.COM \
 			dos/dossys.obj floppies/edos.obj floppies/dos.fs
 	$(LD) $(LDFLAGS) edos.lnk $@ && ./makeelfs edos.img floppies/dos.fs
 
-all: ellipse.rom hellow.img memopad.img edos.img
+all: ellipse.rom hellow.img memopad.img edos.img elfsdisk.img
 
 .DELETE_ON_ERROR:
 

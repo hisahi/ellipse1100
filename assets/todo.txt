@@ -1,4 +1,11 @@
-console.com drive changing
-console.com path to .com
+optimize scroll up in fixtext
 fopen syscall
-createfile, removefile, renamefile, mkdir, rmdir...
+type
+create/truncfile
+removefile
+mkdir
+rmdir
+renamefile
+movefile
+test open/close (COPY command)
+

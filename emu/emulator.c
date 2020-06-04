@@ -182,7 +182,7 @@ int emulator_main()
         if (fp)
         {
             f2wp = file_is_readonly(drive1fn);
-            if (!floppy_mount(0, fp, f2wp))
+            if (!floppy_mount(1, fp, f2wp))
                 printf("Mounted floppy to drive II\n");
             else
                 printf("Could not mount floppy drive II\n"

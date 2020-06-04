@@ -396,10 +396,63 @@ COMMAND_DIR_EMPTY_PATH:
         JSR     COMMAND_DIR_FOOTER
         RTS
 
+COMMAND_DIR_INVALID:
+        ACC16
+        LDA     #DOS_ERR_INVALID_DRIVE
+COMMAND_DIR_ERR:
+        JSR     COMMAND_ERROR.W
+        RTS
+
+.ACCu 8
+CMDNAMEHASWILDCARDS:
+        PHX
+        PHY
+        LDX     #0
+-       LDA     NAMEBUF.W,X
+        BEQ     +
+        CMP     #'*'
+        BEQ     @FOUND
+        CMP     #'?'
+        BEQ     @FOUND
+        INX
+        BRA     -
++       PLY
+        PLX
+        CLC
+        RTS
+@FOUND  PLY
+        PLX
+        SEC
+        RTS
+
 COMMAND_DIR_SUPPLIED:
         ACC16
         STZ     DIRDRIVENUM.W
+        LDA     #$3E00
+        DOSCALL
+        AND     #$FF
+        STA     DIROLDDRIVE.W
         ACC8
+        ; check drive
+        LDA     CONBUF+1.W,X
+        CMP     #':'
+        BNE     +
+        LDA     CONBUF.W,X
+        INX
+        INX
+        JSR     CMDUPPERCASE.W
+        CMP     #'A'
+        BCC     COMMAND_DIR_INVALID
+        CMP     #'Z'+1
+        BCS     COMMAND_DIR_INVALID
+        SEC
+        SBC     #'A'-1
+        ACC16
+        ORA     #$0E00
+        DOSCALL
+        BCS     COMMAND_DIR_ERR
+        ACC8
++
         ; scan to end of path
 -       INX
         LDA     CONBUF.W,X
@@ -419,6 +472,7 @@ COMMAND_DIR_SUPPLIED:
 -       INX
         INY
         LDA     CONBUF.W,X
+        JSR     CMDUPPERCASE.W
         STA     NAMEBUF.W,Y
         BEQ     +
         CPY     #15
@@ -431,9 +485,9 @@ COMMAND_DIR_SUPPLIED:
         LDY     #_sizeof_PATHBUF
 -       DEY
         CPX     DIRTMP.W
-        BEQ     +
         BCC     +
         LDA     CONBUF.W,X
+        JSR     CMDUPPERCASE.W
         STA     PATHBUF.W,Y
         DEX
         BRA     -
@@ -441,9 +495,12 @@ COMMAND_DIR_SUPPLIED:
         STA     PATHBUF.W,Y
         INY
         STY     DIRTMP+2.W
+
         ; resolve file. is it a folder? if so, shift backwards
         LDA     NAMEBUF.W
         BEQ     +++
+        JSR     CMDNAMEHASWILDCARDS.W
+        BCS     +++
         ACC16
         LDA     DIRTMP+2.W
         CLC
@@ -481,18 +538,14 @@ COMMAND_DIR_SUPPLIED:
         STA     NAMEBUF-1.W
         LDA     #0
         STA     NAMEBUF.W
-+++     ACC8
-        LDA     #0
-        STA     NAMEBUF-1.W
-        ACC16
++++     ACC16
+
         LDA     #PATHBUF
         CLC
         ADC     DIRTMP+2.W
         TAX
         ACC8
         JSR     COMMAND_BUILD_XPATH.W
-        LDA     #'\'
-        STA     NAMEBUF-1.W
 
         ACC16
         LDA     XPATHBUF.W
@@ -507,6 +560,10 @@ COMMAND_DIR_SUPPLIED:
         TAX
         JSR     COMMAND_DIR_LIST
         JSR     COMMAND_DIR_FOOTER
+
+        LDA     DIROLDDRIVE.W
+        ORA     #$0E00
+        DOSCALL
 
         RTS
 
@@ -541,6 +598,8 @@ COMMAND_DIR_HEADER:
         STZ     DIRTOTALFILES.W
         
         PLX
+COMMAND_DIR_CLC:
+        CLC
 COMMAND_DIR_RTS:
         RTS
 
@@ -560,7 +619,7 @@ COMMAND_DIR_LIST:
         BCC     @FILELOOP
 @ERRNEXT:
         CMP     #DOS_ERR_NO_MORE_FILES
-        BEQ     COMMAND_DIR_RTS                 ; no more files
+        BEQ     COMMAND_DIR_CLC                 ; no more files
         JSR     COMMAND_ERROR.W
         ;TODO: handle disk errors?
         BRA     COMMAND_DIR_RTS
