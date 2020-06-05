@@ -319,7 +319,7 @@ TEXT_UPDATE_ENTIRE_SCREEN:
         STA     DMA0DST.w
         LDA     #BANKS.w        ; bank setup
         STA     DMA0BNKS.w
-        LDA     #COUNT.w        ; copy total of $1E00 - 80 bytes
+        LDA     #COUNT.w
         STA     DMA0CNT.w
         ACC8
         LDA     #$90|FLAGS.b    ; enable DMA

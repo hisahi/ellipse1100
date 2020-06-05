@@ -30,6 +30,13 @@ COMMAND_EXIT:
         DOSCALL
 
 .ACCU 16
+COMMAND_VER:
+        LDX     #CONSOLEMESSAGE
+        LDA     #$1900
+        DOSCALL
+        RTS
+
+.ACCU 16
 COMMAND_CLS:
         SEC
         JSL     $013FEC ; clear screen
@@ -327,6 +334,8 @@ COMMAND_DIR:
 @MAINLOOP:
         LDA     CONBUF.W,X
         BEQ     +
+        JSR     COMMANDPARSESKIPSP.W
+        LDA     CONBUF.W,X
         LDA     #'/'
         BEQ     @POSTFLAG
         INX
@@ -1181,4 +1190,75 @@ COMMAND_TIME_PARSE:
         STA     NUMTMP.W
         CLC
         ACC16
+        RTS
+
+.ACCU 16
+COMMAND_TYPE:
+        ACC8
+
+        LDA     CONBUF.W,X
+        BNE     +
+        JMP     COMMAND_ERROR_FEW
++       ACC16
+        TXA
+        CLC
+        ADC     #CONBUF.W
+        TAX
+        LDA     #$0F01
+@DBGOPEN
+        DOSCALL
+        BCC     +
+        JSR     COMMAND_ERROR
+        RTS
++       
+        PHD
+        LDA     #FILEBUF.W
+        TCD
+@READLOOP
+        LDY     #FILEBUFSIZE.W
+        LDA     #$2100
+        DOSCALL
+        BCS     @ERRC
+
+        CPY     #0
+        BEQ     @FINISH
+        STY     DIRTMP.W
+
+        ACC8
+        LDA     #0
+        STA     FILEBUF.W,Y
+        ACC16
+
+        PHX
+        LDX     #FILEBUF.W
+        LDA     #$1900
+        DOSCALL
+
+        TXA
+        SEC
+        SBC     #FILEBUF.W
+        PLX
+
+        CMP     DIRTMP.W
+        BCC     @FINISH
+
+        LDA     DIRTMP.W
+        CMP     #FILEBUFSIZE.W
+        BEQ     @READLOOP
+        
+@FINISH
+        PLD
+        ; close file, ignore errors
+        LDA     #$10FF
+        DOSCALL
+        RTS
+@ERRC
+        ; close file, ignore errors
+        LDA     #$10FF
+        DOSCALL
+        LDA     #$020D
+        DOSCALL
+@ERR
+        PLD
+        JSR     COMMAND_ERROR
         RTS

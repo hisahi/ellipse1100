@@ -144,7 +144,7 @@ ELLIPSE DOS API
                                         (only possible if redirected)
         Output string terminating in '$'    $09
             In:     B:X=address to string
-            Out:    X=nest address to read (new X - old X = chars written)
+            Out:    X=next address to read (new X - old X = chars written)
         Read line of input                  $0A
             In:     B:X=buffer
                     Y=size of buffer (not incl. null character)
@@ -162,10 +162,13 @@ ELLIPSE DOS API
             Out:    success C=0     X=file handle
                     failure C=1     A=error
         Close file                          $10
-            In:     X=file handle
+            In:     Al =$00 if we want the handle to still be valid
+                      <>$00 if we don't care (about disk errors),
+                            the file should be closed anyway
+                    X=file handle
             Out:    success C=0
                     failure C=1     A=error     X=0 if handle still valid
-                                                  <>0 if no longer valid
+                                                <>0 if no longer valid
         Find first file with matching name  $11
             In:     B:X=xpathname   B:Y=address to FIB (file index block)
             Out:    success C=0
@@ -230,6 +233,8 @@ ELLIPSE DOS API
         Set file pointer position           $24
             In      Al=$00 for start of file, $01 for relative to current,
                        $02 for end of file
+                       $FF to not move pointer (ignore Y, D) and only
+                           return current position
                     X=file handle
                     Y=high word of new 32-bit value
                     D=low word of new 32-bit value
@@ -361,7 +366,7 @@ ELLIPSE DOS API
         $02:0F      file name
         $10:11      directory chunk
         $12:13      directory entry offset
-        $14:17      current offset (also offset into chunk)
+        $14:17      current offset (low N bits also offset into chunk)
         $18:19      current chunk
         $1A:1D      total size
         $1E:1F      first chunk
@@ -369,7 +374,6 @@ ELLIPSE DOS API
         $21         current file cache
         $22:23      job (process) ID
         $24         file mode
-        $2E:2F      last chunk
 
     DOS file index block
         $00:1F      file/directory entry

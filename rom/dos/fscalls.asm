@@ -185,22 +185,114 @@ DOSFINDNEXT:
         SEC
         RTS
 
+DOSFINDOPENHANDLESLOT:
+        PHB
+        PHA
+        PLB
+        ACC16
+        LDX     #0
+-       LDA     $0020.W,X
+        BEQ     +
+        INX
+        INX
+        CPX     #$0020
+        BCC     -
+        LDA     #DOS_ERR_NO_MORE_HANDLES
+        ACC16
+        PLB
+        PLB
+        SEC
+        RTS
++       TXA
+        ACC16
+        LSR     A
+        PLB
+        PLB
+        CLC
+        RTS
+
+.ACCU 16
 ; $0F = open file
 DOSOPENFILE:
+        PHX
+        PHY
+        AND     #$FF
+        STA     DOSLD|DOSTMPX3.L
+        JSR     DOSCOPYBXSTRBUFUC.W
+        LDA     9,S                     ; old program bank
+        AND     #$FF
+        STA     DOSLD|DOSTMPX1.L
+        JSR     DOSFINDOPENHANDLESLOT.W
+        BCS     @ERR
+        STA     DOSLD|DOSTMPX2.L
+        ENTERDOSRAM
+        ACC8
+        LDA     #$80
+        STA     DOSIOBANK.B
+        ACC16
+        JSR     DOSPAGEINDIR.W
+        LDX     #0
+        JSR     DOSEXTRACTRESOLVEPATH.W
+        BCS     @ERRM
+        PHX
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        PLX
+        BCS     @ERRM
+        JSR     DOSRESOLVEFILE.W
+        BCS     @ERRM
+        LDX     DOSTMPX3.B                      ; mode
+        LDY     DOSTMPX1.B                      ; job ID
+        CPX     #0
+        BEQ     @INVALIDMODE
+        CPX     #4
+        BCS     @INVALIDMODE
+        JSR     DOSOPENHANDLE.W
+        BCS     @ERRM
+        
+        ; file handle is open. place into local table
+        PHA
+        LDA     DOSTMPX2.B
+        ASL     A
+        TAX
+        PLA
+        PHB
+        LDY     DOSTMPX1.B
+        PHY
+        PLB
+        STA     $0020.W,X
+        PLB
+        PLB
 
+        EXITDOSRAM
+        PLY
+        PLX
+        LDA     DOSLD|DOSTMPX2.L
+        TAX
+        LDA     #$0000
+        CLC
+        RTS
+@INVALIDMODE
+        LDA     #DOS_ERR_BAD_PARAMETER.W
+@ERRM   EXITDOSRAM
+@ERR    PLY
+        PLX
+        SEC
+        RTS
+
+; must be called with old program bank in A
 DOSLOOKUPHANDLE:
         CPX     #16
         BCS     @BADHANDLE
         PHA
         PHB
-        ; stack: (user code) JSL24($810000) JSR16(callx) JSR16(LOOKUPANDVERIFY)
-        ;               A16 B8
         ACC8
-        LDA     10,S    ; current program bank
         PHA
         ACC16
         PLB
-        LDA     $0000,X
+        TXA
+        ASL     A
+        TAX
+        LDA     $0020.W,X
         TAX
         PLB
         PLA
@@ -210,19 +302,67 @@ DOSLOOKUPHANDLE:
         SEC
         RTS
 
+DOSTRASHHANDLE:
+        CPX     #16
+        BCS     @BADHANDLE
+        PHA
+        PHB
+        ; stack: (user code) JSL24($810000) JSR16(callx) JSR16(TRASHHANDLE)
+        ;               A16 B8
+        ACC8
+        PHA
+        ACC16
+        PLB
+        TXA
+        ASL     A
+        TAX
+        STZ     $0020.W,X
+        PLB
+        PLA
+@BADHANDLE
+        RTS
+
 ; $10 = close file
 DOSCLOSEFILE:
         PHA
         PHX
         PHY
-        JSR     DOSLOOKUPHANDLE.W
+        ; stack: JSL24(K8 PC16) JSR16 A16 X16 Y16
+        LDA     11,S
+        JSR     DOSLOOKUPHANDLE.W       ; also verifies
         BCS     ++
         ENTERDOSRAM
-        JSR     DOSVERIFYHANDLE.W
-        BCS     +
+        LDA     8,S                     ; orig A
+        AND     #$FF
+        BNE     @IGNOREERRORS
         JSR     DOSCLOSEHANDLE.W
+        BCS     @ERR
+        JSR     DOSWRITEBACK.W
+        BCS     @ERR
+        ; original X
+        LDA     6,S
+        TAX
+        LDA     11,S
+        JSR     DOSTRASHHANDLE.W
+        CLC
+@ERR
 +       EXITDOSRAM
 ++      PLY
+        PLX
+        PLA
+        RTS
+        
+@IGNOREERRORS:
+        JSR     DOSCLOSEHANDLE.W
+        JSR     DOSWRITEBACK.W
+        ; original X
+        LDA     6,S
+        TAX
+        LDA     14,S                    ; orig bank
+        JSR     DOSTRASHHANDLE.W
+        CLC
+        EXITDOSRAM
+        PLY
         PLX
         PLA
         RTS
@@ -273,8 +413,14 @@ DOSGETATTRS:
 ; $21 = read from file
 DOSFILEREAD:
         PHX
-        JSR     DOSLOOKUPHANDLE.W
-        BCS     +++
+        PHA
+        ; stack: JSL24(K8 PC16) JSR16 X16 A16
+        LDA     9,S
+        JSR     DOSLOOKUPHANDLE.W       ; also verifies
+        BCC     +
+        PLX
+        BRA     +++
++       PLA
         ACC8
         PHB
         PLA
@@ -285,9 +431,6 @@ DOSFILEREAD:
         TDC
         STA     DOSLD|DOSTMPX2.L
         ENTERDOSRAM
-        JSR     DOSVERIFYHANDLE.W
-        BCS     ++
-        ; TODO: check if can read
         STX     DOSTMPX3.B
         STZ     DOSTMPX1.B
 -       LDX     DOSTMPX3.B
@@ -299,7 +442,7 @@ DOSFILEREAD:
         STY     DOSTMPX5.B
 @READX5
         LDA     DOSTMPX5.B
-        BEQ     @ENDLOOP
+        BEQ     @FILEEOF
         JSR     DOSFILEREADCYCLE.W
         BCC     @ENDLOOP
         PHA
@@ -317,6 +460,8 @@ DOSFILEREAD:
         TAY
         BEQ     +
         BRL     -
+@FILEEOF
+        PLY
 +       LDY     DOSTMPX1.B
         CLC
 ++      EXITDOSRAM
@@ -331,20 +476,25 @@ DOSFILEREAD:
 ; $22 = write to file
 DOSFILEWRITE:
         PHX
-        JSR     DOSLOOKUPHANDLE.W
-        BCS     +++
+        PHA
+        ; stack: JSL24(K8 PC16) JSR16 X16 A16
+        LDA     9,S
+        JSR     DOSLOOKUPHANDLE.W       ; also verifies
+        BCC     +
+        PLX
+        BRA     +++
++       PLA
         ACC8
         PHB
         PLA
         ACC16
         AND     #$00FF
-        ORA     #$8000
+        XBA
+        ORA     #$0080
         STA     DOSLD|DOSTMPX4.L
         TDC
         STA     DOSLD|DOSTMPX2.L
         ENTERDOSRAM
-        JSR     DOSVERIFYHANDLE.W
-        BCS     ++
         ; TODO: check if can write
         STX     DOSTMPX3.B
         STZ     DOSTMPX1.B
@@ -356,8 +506,6 @@ DOSFILEWRITE:
         BCS     @READX5
         STY     DOSTMPX5.B
 @READX5
-        LDA     DOSTMPX5.B
-        BEQ     @ENDLOOP
         JSR     DOSFILEWRITECYCLE.W
         BCC     @ENDLOOP
         PHA
@@ -389,11 +537,15 @@ DOSFILEWRITE:
 ; $23 = get file size
 DOSFILEGETSIZE:
         PHX
-        JSR     DOSLOOKUPHANDLE.W
-        BCS     +++
+        PHA
+        ; stack: JSL24(K8 PC16) JSR16 X16 A16
+        LDA     9,S
+        JSR     DOSLOOKUPHANDLE.W                       ; also verifies
+        BCC     +
+        PLX
+        BRA     +++
++       PLA
         ENTERDOSRAM
-        JSR     DOSVERIFYHANDLE.W
-        BCS     ++
         JSR     DOSFILEDOGETSIZE.w
 ++      EXITDOSRAM
 +++     PLX
@@ -402,11 +554,15 @@ DOSFILEGETSIZE:
 ; $24 = seek file
 DOSFILESEEK:
         PHX
-        JSR     DOSLOOKUPHANDLE.W
-        BCS     +++
+        PHA
+        ; stack: JSL24(K8 PC16) JSR16 X16 A16
+        LDA     9,S
+        JSR     DOSLOOKUPHANDLE.W                       ; also verifies
+        BCC     +
+        PLX
+        BRA     +++
++       PLA
         ENTERDOSRAM
-        JSR     DOSVERIFYHANDLE.W
-        BCS     ++
         JSR     DOSFILEDOSEEK.w
 ++      EXITDOSRAM
 +++     PLX
@@ -415,11 +571,15 @@ DOSFILESEEK:
 ; $25 = truncate file at pointer
 DOSFILETRUNC:
         PHX
-        JSR     DOSLOOKUPHANDLE.W
-        BCS     +++
+        PHA
+        ; stack: JSL24(K8 PC16) JSR16 X16 A16
+        LDA     9,S
+        JSR     DOSLOOKUPHANDLE.W                       ; also verifies
+        BCC     +
+        PLX
+        BRA     +++
++       PLA
         ENTERDOSRAM
-        JSR     DOSVERIFYHANDLE.W
-        BCS     ++
         JSR     DOSFILEDOTRUNC.w
 ++      EXITDOSRAM
 +++     PLX

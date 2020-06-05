@@ -26,12 +26,15 @@
 
 .INCLUDE "doscomhd.asm"
 
-.DEFINE CONBUF $FA00
-.DEFINE XPATHBUF $FB00
-.DEFINE PATHBUF $FB80
-.DEFINE NAMEBUF $FC00
-.DEFINE EXECBUF $FC80
-.DEFINE FISBUF $FD00
+.DEFINE FILEBUF $F800
+.DEFINE FILEBUFSIZE $0400
+.DEFINE FILETMP $FC00
+.DEFINE FISBUF $FC20
+.DEFINE CONBUF $FD00
+.DEFINE XPATHBUF $FE00
+.DEFINE PATHBUF $FE80
+.DEFINE NAMEBUF $FF00
+.DEFINE EXECBUF $FF80
 .DEFINE _sizeof_PATHBUF (NAMEBUF-PATHBUF)
 
 BEGINNING:
@@ -52,10 +55,7 @@ DATETIMEQUERY:
 @ALREADYSET:
 
 BEGINNINGMSG:
-        LDX     #CONSOLEMESSAGE
-        LDA     #$1900
-        DOSCALL
-
+        JSR     COMMAND_VER
 CMDLOOP:
         LDA     ECHOON.W
         AND     #$FF
@@ -638,6 +638,14 @@ COMMAND_ERROR:
         DOSCALL
         RTS
 
+COMMAND_ERROR_FEW:
+        ACC16
+        LDA     #$1900
+        LDX     #CMDPARFEWERR.W
+        DOSCALL
+
+        RTS
+
 .ACCU 8
 CMDUPPERCASE:
         CMP     #'a'
@@ -947,6 +955,10 @@ POWERSOF10:
 CONSOLEMESSAGE:
         .DB     13, "Ellipse DOS Console v1.00", 13
         .DB     "(C) Ellipse Data Electronics, 1985-1986.", 13, 13, 0
+CMDPARFEWERR:
+        .DB     "Not enough parameters", 13, 0
+CMDPARMANYERR:
+        .DB     "Too many parameters", 13, 0
 CMDDATEMSG:
         .DB     "Current system date: "
 CMDDATEMSGFMT:
@@ -1124,6 +1136,7 @@ COMMANDFNVALIDCHARS:
         .DB     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
 
 COMMANDTABLE_A:
+        .DB     0
 COMMANDTABLE_B:
         .DB     0
 COMMANDTABLE_C:
@@ -1147,14 +1160,23 @@ COMMANDTABLE_E:
         .DW     COMMAND_EXIT
         .DB     0
 COMMANDTABLE_F:
+        .DB     0
 COMMANDTABLE_G:
+        .DB     0
 COMMANDTABLE_H:
+        .DB     0
 COMMANDTABLE_I:
+        .DB     0
 COMMANDTABLE_J:
+        .DB     0
 COMMANDTABLE_K:
+        .DB     0
 COMMANDTABLE_L:
+        .DB     0
 COMMANDTABLE_M:
+        .DB     0
 COMMANDTABLE_N:
+        .DB     0
 COMMANDTABLE_O:
         .DB     0
 COMMANDTABLE_P:
@@ -1162,17 +1184,28 @@ COMMANDTABLE_P:
         .DW     COMMAND_PAUSE
         .DB     0
 COMMANDTABLE_Q:
+        .DB     0
 COMMANDTABLE_R:
+        .DB     0
 COMMANDTABLE_S:
         .DB     0
 COMMANDTABLE_T:
         .DB     "IME", 0
         .DW     COMMAND_TIME
+        .DB     "YPE", 0
+        .DW     COMMAND_TYPE
         .DB     0
 COMMANDTABLE_U:
+        .DB     0
 COMMANDTABLE_V:
+        .DB     "ER", 0
+        .DW     COMMAND_VER
+        .DB     0
 COMMANDTABLE_W:
+        .DB     0
 COMMANDTABLE_X:
+        .DB     0
 COMMANDTABLE_Y:
+        .DB     0
 COMMANDTABLE_Z:
         .DB     0

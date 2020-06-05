@@ -1,11 +1,10 @@
-optimize scroll up in fixtext
-fopen syscall
-type
 create/truncfile
+test open/close (COPY command)
 removefile
 mkdir
 rmdir
 renamefile
 movefile
-test open/close (COPY command)
-
+optimize scroll up in fixtext
+DOS device files
+CONSOLE redirection

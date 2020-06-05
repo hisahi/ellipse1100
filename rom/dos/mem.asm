@@ -37,7 +37,7 @@ DOSINITMISCBUFFERS:
         STA     DOSFILETABLE.W,Y
         TYA
         CLC
-        ADC     #$0020
+        ADC     #$0030
         TAY
         CPY     #$0400
         BCC     -

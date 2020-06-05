@@ -1461,21 +1461,21 @@ DOSNEXTFREEHANDLESLOT:
         RTS
 
 DOSALLOWEDTOOPENFILE:
+        LDX     DOSNEXTFILEOFF.B
         LDA     DOSTMP1.B
         CMP     #1
         BEQ     +
-        LDX     DOSNEXTFILEOFF.B
         LDA     DIRCHUNKCACHE.W,X
         AND     #$0100
         BNE     @ERR                    ; cannot open read-only files with W
 +       LDA     DIRCHUNKCACHE.W,X
-        AND     #$0040
-        BNE     @ERR                    ; cannot open subdir as file
+        AND     #$00C0
+        BNE     @ERR                    ; cannot open subdir or deleted
         LDX     #0
         LDY     #OPENFILES
         ACC8
 -       LDA     DOSFILETABLE.W,X
-        BPL     @SKIP
+        BMI     @SKIP
         LDA     DOSTMP1.B
         ACC16
         LDA     DOSFILETABLE+$10.W,X
@@ -1555,27 +1555,30 @@ DOSFLUSHALLFILES:
 ; C=1 in case of error
 DOSPAGEINFILE:
         ACC8
-        LDA     $0024.W,X
-        AND     #$01
-        BEQ     @NOCACHE
         LDA     $0021.W,X
         BPL     @RET
         LDA     DOSLASTFCACHE.B
         STA     DOSTMP8.B
+        PHX
         ; evict file if the cache is already used
         JSR     DOSEVICTFILE.W
         ; load chunk
+        PLX
+        ACC8
+        LDA     $0024.W,X
+        AND     #$01
+        BEQ     @NOLOAD
         PHX
         LDY     $0018.W,X
         LDA     DOSTMP8.B
         ACC16
-        AND     #$FF
         CONVERTFILECACHEPOINTER
         TAX
         JSR     DOSLOADCHUNK.W
         BCS     @ERR
         PLX
         ACC8
+@NOLOAD:
         LDA     DOSTMP8.B
         STA     $0021.W,X
 @RET    CMP     DOSLASTFCACHE.B
@@ -1593,6 +1596,7 @@ DOSPAGEINFILE:
         RTS
 @ERR    PLX
         SEC
+        ACC16
         RTS
 
 ; makes sure cache slot at DOSTMP8.B is unused
@@ -1625,8 +1629,7 @@ DOSFLUSHFILE:
         AND     #$0080
         BNE     @RET
         LDA     $0024.W,X
-        AND     #$00FF
-        CMP     #1
+        AND     #$0002
         BEQ     @RET
         ACC8
         LDA     $0021.W,X
@@ -1709,15 +1712,11 @@ DOSOPENHANDLE:
         BCS     @ERR
 ; import file handle from directory entry
 
-        LDA     DOSNEXTFILEOFF.W
+        ACC16
+        LDA     DOSNEXTFILEOFF.B
         CLC
         ADC     #DIRCHUNKCACHE
         STA     DOSTMP2.B
-
-        LDY     #0
-        LDA     (DOSTMP2.B),Y
-        AND     #$C0
-        BNE     @SUBDIR         ; cannot open subdirs or deleted files
 
         LDY     #30
         TXA
@@ -1755,32 +1754,12 @@ DOSOPENHANDLE:
 ; file mode
         LDA     DOSTMP1.B
         STA     DOSFILETABLE+$24.W,X
-; last chunk
-        LDA     DOSFILETABLE+$1E.W,X
-        PHX
-        TAX
--       STX     DOSTMP4.B
-        JSR     DOSNEXTCHUNK.W
-        BCS     @ERRF
-        CPX     #$FFFF
-        BNE     -
-        PLX
-        LDA     DOSTMP4.B
-        STA     DOSFILETABLE+$2E.W,X
 
+; done!
         LDA     DOSTMP3.B
         CLC
         RTS
-@ERRF   PLX
-        PHA
-        LDA     #$FFFF
-        STA     DOSFILETABLE+$2E.W,X
-        PLA
 @ERR    SEC
-        RTS
-@SUBDIR
-        lDA     #DOS_ERR_ACCESS_DENIED.W
-        SEC
         RTS
 
 ; return file handle for device according to DOSFILEDEVICE
@@ -1793,15 +1772,13 @@ DOSOPENHANDLEDEV:
 ; assumes B=$80 D=DOSPAGE
 ; X=handle itself
 DOSVERIFYHANDLE:
-        CPX     #$0000
-        BEQ     @INVALID
-        CPX     #$0001                  ; console device
-        BNE     @INVALID
+        CPX     #2              ; number of device files
+        BCC     +
         CPX     #DOSFILETABLE.W
         BCC     @INVALID
         CPX     #DOSFILETABLE.W+$0030*OPENFILES.W
         BCS     @INVALID
-        CLC
++       CLC
         RTS
 @INVALID:
         LDA     #DOS_ERR_BAD_FILE_HANDLE
@@ -1897,17 +1874,22 @@ DOSPACKDATE:
 ; closes file handle and updates directory entry
 ; local file table must be updated afterwards to replace handle with 0
 ; assumes B=$80 D=DOSPAGE
+; A=$00 if we care about errors, <>$00 if we don't
 ; X=handle itself
 ; should call DOSWRITEBACK afterwards!
 DOSCLOSEHANDLE:
 .ACCU 16
+        STA     DOSTMP4.B
+
         CPX     #DOSFILETABLE
         BCC     @NOCLOSE
         CPX     #DOSFILETABLE+$0030*OPENFILES
         BCS     @NOCLOSE
         JSR     DOSFLUSHFILE.W
-        BCS     @CLOSEERR0
-        PHX
+        BCC     +
+        LDA     DOSTMP4.B
+        BEQ     @CLOSEERR
++       PHX
 
 ; maybe update directory entry
         LDA     $0024.W,X
@@ -1918,12 +1900,18 @@ DOSCLOSEHANDLE:
         AND     #$FF
         STA     DOSACTIVEDRIVE.B
         JSR     DOSPAGEINACTIVEDRIVE.W
-        BCS     @CLOSEERR0
-
+        BCC     +
+        LDA     DOSTMP4.B
+        BEQ     @CLOSEERRX
+        BNE     @SKIPFLUSH
++       
         LDA     $0010.W,X
         JSR     DOSPAGEINACTIVEDIR.W
-        BCS     @CLOSEERR0
-        LDA     #$FFFF
+        BCC     +
+        LDA     DOSTMP4.B
+        BEQ     @CLOSEERRX
+        BNE     @SKIPFLUSH
++       LDA     #$FFFF
         STA     DOSADIRDIRTY.B
 
         LDA     $0012.W,X
@@ -1945,6 +1933,7 @@ DOSCLOSEHANDLE:
 
         JSR     DOSPACKDATE.W
 
+@SKIPFLUSH
 ; clear out file entry in global table
         LDA     1,S
         TAX
@@ -1959,12 +1948,9 @@ DOSCLOSEHANDLE:
 @NOCLOSE:
         RTS
 
-@CLOSEERR0:
-        LDX     #0
-        SEC
-        RTS
-@CLOSEERR1:
-        LDX     #1
+@CLOSEERRX:
+        PLX
+@CLOSEERR:
         SEC
         RTS
 
@@ -1976,6 +1962,7 @@ DOSFILEHANDLECONVADDR:
 .ACCU 16
         JSR     DOSPAGEINFILE.W
         BCS     +
+        ACC16
         LDA     $0021.W,X
         CONVERTFILECACHEPOINTER
 +       RTS
@@ -1983,24 +1970,47 @@ DOSFILEHANDLECONVADDR:
 ; number of bytes remaining in current chunk for paged-in file
 ; assumes B=$80 D=DOSPAGE
 ; X=handle itself
-; return value in A
+; return value in A (0 if EOF)
 DOSFILEREMBYTES:
+        CPX     #DOSFILETABLE.W
+        BCC     DOSFILEREMBYTESDEV
+
         LDA     $0016.W,X
-        CMP     $001E.W,X
-        BNE     +
-        LDA     $0014.W,X
-        EOR     $001C.W,X
+        CMP     $001C.W,X
+        BCC     ++
+        BEQ     +
+        BCS     DOSFILEREMBYTESWRITE@EOF
++       LDA     $0014.W,X
+        EOR     $001A.W,X
         AND     #$FC00
         BEQ     DOSFILEREMBYTESWRITE@LAST
+        BCS     DOSFILEREMBYTESWRITE@EOF
 DOSFILEREMBYTESWRITE:
-+       LDA     $0014.W,X
+++      LDA     $0014.W,X
         AND     #$03FF
         EOR     #$03FF
+        INC     A
         RTS
-@LAST   LDA     $001C.W,X
+@LAST   LDA     $001A.W,X
         SEC
         SBC     $0014.W,X
         RTS
+@EOF    LDA     #0
+        RTS
+
+; remaining bytes to read/write in current chunk for device
+DOSFILEREMBYTESDEV:
+        ; always chunk size
+        LDA     #$0400
+        RTS
+
+; read chunk from device
+DOSFILEREADCYCLEDEV:
+        STP;TODO
+
+; write chunk to device
+DOSFILEWRITECYCLEDEV:
+        STP;TODO
 
 ; return if file is EOF
 ; assumes B=$80 D=DOSPAGE
@@ -2461,13 +2471,16 @@ DOSPAGEINFILENEXTCHUNK:
 ; C=0 if read
 ; C=1 if error
 DOSFILEREADCYCLE:
+        CPX     #DOSFILETABLE.W
+        BCC     @DEV
+
         BIT     $0016.W,X
         BMI     @NEGOFFSET
-        CMP     DOSTMPX5.B
+        LDA     DOSTMPX5.B
         BEQ     @ZERO
         LDX     DOSTMPX3.B
         JSR     DOSPAGEINFILE.W
-        BCS     +
+        BCS     @INSTARET
         RESERVEDMA1
 .ACCU 16
         LDX     DOSTMPX3.B
@@ -2485,29 +2498,39 @@ DOSFILEREADCYCLE:
         STA     DMA1CNT.L
         LDA     DOSTMPX4.B
         STA     DMA1BNKS.L
+        ACC8
+        LDA     #$90.B
+        STA     DMA1CTRL.L
 -       LDA     DMA1STAT.L
         BMI     -
+        ACC16
         LDA     DMA1DST.L
         STA     DOSTMPX2.B
         FREEDMA1
-        LDA     DOSTMPX5.B
-        CLC
-        ADC     $0014.W,X
-        STA     $0014.W,X
-        LDA     $0016.W,X
-        ADC     #0
-        STA     $0016.W,X
-; did we reach end of chunk?
-        EOR     DOSTMP2.B
-        AND     #$0400
-        BNE     @NEXTCH
-+       RTS
+        BRA     @READOK
+@DEV    JMP     DOSFILEREADCYCLEDEV
 @NEGOFFSET:
         LDA     #DOS_ERR_READ_ERROR
         SEC
         RTS
 @ZERO   CLC
+@INSTARET:
         RTS
+@READOK
+        LDA     DOSTMPX5.B
+        CLC
+        ADC     $0014.W,X
+        STA     $0014.W,X
+        PHA
+        LDA     $0016.W,X
+        ADC     #0
+        STA     $0016.W,X
+        PLA
+; did we reach end of chunk?
+        EOR     DOSTMP2.B
+        AND     #$0400
+        BNE     @NEXTCH
++       RTS
 @NEXTCH:
         LDX     DOSTMPX3.B
         JSR     DOSFILENEXTCHUNKREAD.W
@@ -2520,6 +2543,9 @@ DOSFILEREADCYCLE:
 ; C=0 if written
 ; C=1 if error
 DOSFILEWRITECYCLE:
+        CPX     #DOSFILETABLE.W
+        BCC     @DEV
+
         BIT     $0016.W,X
         BMI     @NEGOFFSET
         LDX     DOSTMPX3.B
@@ -2527,6 +2553,8 @@ DOSFILEWRITECYCLE:
         LDX     DOSTMPX3.B
         CMP     DOSTMPX5.B
         BEQ     @ZERO
+        JSR     DOSPAGEINFILE.W
+        BCS     @INSTARET
         RESERVEDMA1
 .ACCU 16
         LDA     DOSTMPX2.B
@@ -2543,8 +2571,12 @@ DOSFILEWRITECYCLE:
         STA     DMA1CNT.L
         LDA     DOSTMPX4.B
         STA     DMA1BNKS.L
--       BIT     DMA1STAT.W
+        ACC8
+        LDA     #$90.B
+        STA     DMA1CTRL.L
+-       LDA     DMA1STAT.L
         BMI     -
+        ACC16
         LDA     DMA1DST.L
         STA     DOSTMPX2.B
         FREEDMA1
@@ -2553,7 +2585,9 @@ DOSFILEWRITECYCLE:
         LDA     #DOS_ERR_WRITE_ERROR
         SEC
         RTS
+@DEV    JMP     DOSFILEWRITECYCLEDEV
 @ZERO   CLC
+@INSTARET:
         RTS
 @WRITEOK:
         LDA     DOSTMPX5.B
@@ -2588,7 +2622,7 @@ DOSFILEWRITECYCLE:
 ; do file seeking
 ; assumes B=$80 D=DOSPAGE
 DOSFILEDOSEEK:
-        CPX     #DOSFILETABLE
+        CPX     #DOSFILETABLE   ; cannot seek devices
         BCC     @NOSEEK
         STX     DOSTMPX3.B
         PHA
