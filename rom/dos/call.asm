@@ -137,10 +137,10 @@ DOSCALLTABLE:
         .DW     DOSSETDIR.W             ; $30 = set current directory
         .DW     DOSGETDIR.W             ; $31 = get current directory
         .DW     DOSUPDDIRENT.W          ; $32 = update file entry
-        .DW     DOSMKDIR.W              ; $33 = create directory
+        .DW     DOSRMDIR.W              ; $33 = delete (empty) directory
         .DW     DOSUNKFUNC.W            ; $34 = 
         .DW     DOSGETFREESPACE.W       ; $35 = get free space
-        .DW     DOSRMDIR.W              ; $36 = delete (empty) directory
+        .DW     DOSMKDIR.W              ; $36 = create directory
         .DW     DOSMOVEENT.W            ; $37 = move file entry
         .DW     DOSLAUNCH.W             ; $38 = launch program
         .DW     DOSGETEXITCODE.W        ; $39 = get exit code

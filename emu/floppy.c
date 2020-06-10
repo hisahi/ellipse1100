@@ -166,8 +166,10 @@ void floppy_unmount(int drivenum)
 static inline BYTE floppy_status(floppy_drive* drive)
 {
     BYTE s;
-    if (drive->status == FLOPPY_STATUS_READING
-            || drive->status == FLOPPY_STATUS_WRITING)
+    if (drive->status != FLOPPY_STATUS_SEEK
+            && drive->status != FLOPPY_STATUS_SEEK_READ
+            && drive->status != FLOPPY_STATUS_SEEK_WRITE
+            && drive->status != FLOPPY_STATUS_DISK_WRITE)
         s |= 0x80;
     else if (drive->status == FLOPPY_STATUS_ERROR)
         s |= 0x40;

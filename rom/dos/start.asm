@@ -56,7 +56,8 @@ DOSSTART:
         STZ     DOSBUSY.B
         
         STZ     DOSCTBLCACHSECT.B
-        STZ     DOSHALTCLOCK.W
+        STZ     DOSHALTCLOCKDMA.W
+        STZ     DOSHALTCLOCKUPD.W
         STZ     DOSCACHEDDIRCH.B
         STZ     DOSKEYBBUFL.B
         STZ     DOSKEYBBUFR.B

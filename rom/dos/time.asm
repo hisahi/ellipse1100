@@ -67,11 +67,13 @@ DOSUPDATETIMETICKSZERO:
         PEA     DOSPAGE.W
         PLD
         
-        LDA     DOSHALTCLOCK.W
+        LDA     DOSHALTCLOCKDMA.W
         BEQ     +
 -       LDA     DMA1STAT.L
         BMI     -
-+
++       LDA     DOSHALTCLOCKUPD.W
+        BNE     DOSTIMETICKSZERO
+
         INC     DOSDATESECOND.B
         LDA     DOSDATESECOND.B
         CMP     #60
@@ -153,9 +155,11 @@ DOSSETDATE:
         BCS     @BADDAY
         AXY8
         DEC     A
+        INC     DOSHALTCLOCKUPD.W
         STA     DOSDATEDAY.B
         STX     DOSDATEMONTH.B
         STY     DOSDATEYEAR.B
+        STZ     DOSHALTCLOCKUPD.W
         AXY16
         PLY
         PLX
@@ -200,18 +204,16 @@ DOSSETTIME:
         PHA
         PHX
         PHY
+        
+        INC     DOSHALTCLOCKUPD.W
 
         STA     DOSDATEHOUR.B
         STX     DOSDATEMINUTE.B
         STY     DOSDATESECOND.B
 
-        LDA     $007000.L
-        AND     #1
-        BEQ     +
-        LDA     #50
-        BRA     ++
-+       LDA     #60
-++      STA     DOSDATETICK.B
+        JSR     DOSTIMETICKSZERO.W
+
+        STZ     DOSHALTCLOCKUPD.W
 
         PLY
         PLX

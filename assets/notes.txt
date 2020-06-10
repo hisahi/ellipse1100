@@ -30,8 +30,7 @@ IO      40-43   FLOPPY I            (floppies: 2 sides, 80 tracks, S sectors,
                                          011 for 12 sectors (960 KB)
                                          100 for 16 sectors (1280 KB)
                                          101 for 20 sectors (1600 KB)
-                                    (R) V: can read/write - 0 if seeking or
-                                             not set up to read/write
+                                    (R) V: 0 if ready, 1 if seeking
                                     (R) E: 1 if IO 41 has error, 0 if not
                                     (W) E: 1 to acknowledge error
                                     (R) W: 0 if disk is write-protected else 1

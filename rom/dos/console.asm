@@ -918,7 +918,7 @@ DIRFLAGS:
 DIRTOTALFILES:
         .DW     0
 DIRTMP:
-        .DW     0, 0
+        .DW     0, 0, 0
 DIRDRIVENUM:
         .DW     0
 DIROLDDRIVE:
@@ -978,7 +978,7 @@ CMDTIMEMSGINVALID:
 CMDUNKNOWN:
         .DB     "Command or file not found", 13, 0
 CMDRMDIRFAIL:
-        .DB     "Cannot create file", 13, 0
+        .DB     "RMDIR can only remove empty directories", 13, 0
 CMDMSGECHO:
         .DB     "ECHO is ", 0
 CMDMSGECHOTOFF:
@@ -1150,12 +1150,16 @@ COMMANDTABLE_C:
 COMMANDTABLE_D:
         .DB     "ATE", 0
         .DW     COMMAND_DATE
+        .DB     "EL", 0
+        .DW     COMMAND_ERASE
         .DB     "IR", 0
         .DW     COMMAND_DIR
         .DB     0
 COMMANDTABLE_E:
         .DB     "CHO", 0
         .DW     COMMAND_ECHO
+        .DB     "RASE", 0
+        .DW     COMMAND_ERASE
         .DB     "XIT", 0
         .DW     COMMAND_EXIT
         .DB     0
@@ -1174,6 +1178,10 @@ COMMANDTABLE_K:
 COMMANDTABLE_L:
         .DB     0
 COMMANDTABLE_M:
+        .DB     "D", 0
+        .DW     COMMAND_MKDIR
+        .DB     "KDIR", 0
+        .DW     COMMAND_MKDIR
         .DB     0
 COMMANDTABLE_N:
         .DB     0
@@ -1186,6 +1194,16 @@ COMMANDTABLE_P:
 COMMANDTABLE_Q:
         .DB     0
 COMMANDTABLE_R:
+        .DB     "D", 0
+        .DW     COMMAND_RMDIR
+        .DB     "EM", 0
+        .DW     COMMAND_REM
+        .DB     "EN", 0
+        .DW     COMMAND_RENAME
+        .DB     "ENAME", 0
+        .DW     COMMAND_RENAME
+        .DB     "MDIR", 0
+        .DW     COMMAND_RMDIR
         .DB     0
 COMMANDTABLE_S:
         .DB     0

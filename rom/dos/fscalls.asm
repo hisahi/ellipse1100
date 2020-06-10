@@ -27,13 +27,26 @@
 .ACCU 16
 .INDEX 16
 
+DOSPAGEINDIRAPI:
+        JSR     DOSPAGEINDIR.W
+        PHA
+        PHX
+        PHY
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        LDA     DOSACTIVEDIR.W
+        JSR     DOSPAGEINACTIVEDIR.W
+        PLY
+        PLX
+        PLA
+        RTS
+
 ; $0E = set active drive
 DOSSETDRIVE:
         DOSMEMENTER
         PHX
         PHY
         PHA
-        JSR     DOSPAGEINDIR.W
+        JSR     DOSPAGEINDIRAPI.W
         PLA
         AND     #$1F
         BEQ     @BAD
@@ -55,7 +68,7 @@ DOSSETDRIVE:
         PLX
         DOSMEMEXIT
         SEC
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $3E = get active drive
 DOSGETDRIVE:
@@ -91,6 +104,8 @@ DOSPACKFIS:
         STA     $0022.W,Y
         LDA     DOSLD|DOSNEXTFILEOFF.L
         STA     $0024.W,Y
+        LDA     DOSLD|DOSNEXTDIRCHUNK.L
+        STA     $0026.W,Y
 @DONE:
         RTS
 
@@ -105,7 +120,7 @@ DOSFINDFIRST:
         LDA     #$80
         STA     DOSIOBANK.B
         ACC16
-        JSR     DOSPAGEINDIR.W
+        JSR     DOSPAGEINDIRAPI.W
         LDX     #0
         JSR     DOSEXTRACTRESOLVEPATH.W
         BCS     @ERRM
@@ -117,6 +132,10 @@ DOSFINDFIRST:
         LDA     DOSACTIVEDIR.B
         STA     DOSNEXTFILEDIR.B
         STZ     DOSNEXTFILEOFF.B
+        LDX     DOSNEXTFILEDIR.B
+        JSR     DOSNEXTCHUNK.W
+        BCS     @ERRMX
+        STX     DOSNEXTDIRCHUNK.B
         PLX
         PHX
         JSR     DOSRESOLVENEXTFILE.W
@@ -128,13 +147,13 @@ DOSFINDFIRST:
         JSR     DOSPACKFIS.W
         PLX
         CLC
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 @ERRMX  PLX
 @ERRM   EXITDOSRAM
 @ERR    PLY
         PLX
         SEC
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 DOSUNPACKFIS:
 .REPEAT 8 INDEX OFF
@@ -152,6 +171,8 @@ DOSUNPACKFIS:
         CLC
         ADC     #$0020
         STA     DOSLD|DOSNEXTFILEOFF.L
+        LDA     $0026.W,Y
+        STA     DOSLD|DOSNEXTDIRCHUNK.L
         RTS
 
 ; $12 = find next matching file
@@ -175,7 +196,7 @@ DOSFINDNEXT:
         JSR     DOSPACKFIS.W
         PLX
         CLC
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 @ERRM   CMP     #DOS_ERR_FILE_NOT_FOUND
         BNE     +
         LDA     #DOS_ERR_NO_MORE_FILES
@@ -183,7 +204,7 @@ DOSFINDNEXT:
 @ERR    PLY
         PLX
         SEC
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 DOSFINDOPENHANDLESLOT:
         PHB
@@ -230,7 +251,7 @@ DOSOPENFILE:
         LDA     #$80
         STA     DOSIOBANK.B
         ACC16
-        JSR     DOSPAGEINDIR.W
+        JSR     DOSPAGEINDIRAPI.W
         LDX     #0
         JSR     DOSEXTRACTRESOLVEPATH.W
         BCS     @ERRM
@@ -270,14 +291,14 @@ DOSOPENFILE:
         TAX
         LDA     #$0000
         CLC
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 @INVALIDMODE
         LDA     #DOS_ERR_BAD_PARAMETER.W
 @ERRM   EXITDOSRAM
 @ERR    PLY
         PLX
         SEC
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; must be called with old program bank in A
 DOSLOOKUPHANDLE:
@@ -350,7 +371,7 @@ DOSCLOSEFILE:
 ++      PLY
         PLX
         PLA
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
         
 @IGNOREERRORS:
         JSR     DOSCLOSEHANDLE.W
@@ -367,7 +388,20 @@ DOSCLOSEFILE:
         PLA
         RTS
 
-; $0D = flush all open files
+; $0D = flush all disk buffers (except files)
+DOSFLUSHBUFFERS:
+        PHA
+        PHX
+        PHY
+        ENTERDOSRAM
+        JSR     DOSWRITEBACK.W
+        EXITDOSRAM
+        PLY
+        PLX
+        PLA
+        JMP     DOSMAYBEENDDIRWRITE.W
+
+; flush all open files
 DOSFLUSHFILES:
         PHA
         PHX
@@ -378,25 +412,225 @@ DOSFLUSHFILES:
         PLY
         PLX
         PLA
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $16 = create/truncate file
 DOSCREATEFILE:
+        PHX
+        PHA
+        JSR     DOSOPENFILE.W
+        BCS     @CHECKERR
+        PLA
+        PLX
+        PHX
+        PHA
+        ; stack: JSL24(K8 PC16) JSR16 X16 A16
+        LDA     9,S
+        JSR     DOSLOOKUPHANDLE.W                       ; also verifies
+        BCC     +
+        PLX
+        BRA     +++
++       PLA
+        ENTERDOSRAM
+        JSR     DOSFILEDOTRUNC.w
+++      EXITDOSRAM
++++     PLX
+        JMP     DOSMAYBEENDDIRWRITE.W
+@CHECKERR
+        CMP     #DOS_ERR_FILE_NOT_FOUND.W
+        BEQ     @CREATE
+        PLX
+        PLX
+        SEC
+        JMP     DOSMAYBEENDDIRWRITE.W
+@CREATE
+        PLA
+        PLX
+        PHX
+        PHY
+        PHA
+        JSR     DOSCOPYBXSTRBUFUC.W
+        LDA     3,S
+        TAY
+        ENTERDOSRAM
+        PHY
+        JSR     DOSPAGEINDIRAPI.W
+        LDX     #0
+        JSR     DOSEXTRACTRESOLVEPATH.W
+        BCS     @ERRM
+        PHX
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        PLX
+        BCS     @ERRM
+        PLY
+        JSR     DOSDOCREATEFILE.W
+        EXITDOSRAM
+        PLA
+        PLY
+        PLX
+        JMP     DOSOPENFILE.W
+@ERRM   PLY
+        EXITDOSRAM
+        PLY
+        PLY
+        PLX
+        SEC
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $13 = delete files
 DOSDELETEFILE:
+        PHX
+        PHY
+        JSR     DOSCOPYBXSTRBUFUC.W
+        ENTERDOSRAM
+        ACC8
+        LDA     #$80
+        STA     DOSIOBANK.B
+        ACC16
+        JSR     DOSPAGEINDIRAPI.W
+        LDX     #0
+        JSR     DOSEXTRACTRESOLVEPATH.W
+        BCS     @ERRM
+        PHX
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        PLX
+        BCS     @ERRM
+        JSR     DOSRESOLVEFILE.W
+        BCS     @ERRM
+        JSR     DOSDODELETEFILE.W
+        BCS     @ERRM
+        EXITDOSRAM
+        PLY
+        PLX
+        CLC
+        JMP     DOSMAYBEENDDIRWRITE.W
+@ERRM   EXITDOSRAM
+@ERR    PLY
+        PLX
+        SEC
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $17 = rename file
 DOSRENAMEFILE:
+        PHX
+        PHY
+        JSR     DOSCOPYBXSTRBUFUC.W
+        ENTERDOSRAM
+        ACC8
+        LDA     #$80
+        STA     DOSIOBANK.B
+        ACC16
+        JSR     DOSPAGEINDIRAPI.W
+        LDX     #0
+        JSR     DOSEXTRACTRESOLVEPATH.W
+        BCS     @ERRM
+        PHX
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        PLX
+        BCS     @ERRM
+        JSR     DOSRESOLVEFILE.W
+        BCS     @ERRM
+        LDA     4,S ; old Y
+        TAX
+        EXITDOSRAM
+        JSR     DOSCOPYBXSTRBUFUC.W
+        ENTERDOSRAM
+        JSR     DOSDORENAMEFILE.W
+        BCS     @ERRM
+        EXITDOSRAM
+        PLY
+        PLX
+        CLC
+        JMP     DOSMAYBEENDDIRWRITE.W
+@ERRM   EXITDOSRAM
+@ERR    PLY
+        PLX
+        SEC
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $37 = move file entry
 DOSMOVEENT:
 
 ; $33 = create directory
 DOSMKDIR:
+        PHX
+        PHY
+        PHA
+        JSR     DOSCOPYBXSTRBUFUC.W
+        LDA     3,S
+        TAY
+        ENTERDOSRAM
+        PHY
+        JSR     DOSPAGEINDIRAPI.W
+        LDX     #0
+        JSR     DOSEXTRACTRESOLVEPATH.W
+        BCS     @ERRM
+        PHX
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        PLX
+        PHX
+        JSR     DOSRESOLVEFILE.W
+        PLX
+        BCC     @ERREX
+        CMP     #DOS_ERR_FILE_NOT_FOUND
+        BNE     @ERRM
+        PLY
+        JSR     DOSCREATEDIRECTORY.W
+        EXITDOSRAM
+        PLA
+        PLY
+        PLX
+        CLC
+        JMP     DOSMAYBEENDDIRWRITE.W
+@ERRM   PLY
+        EXITDOSRAM
+        PLY
+        PLY
+        PLX
+        SEC
+        JMP     DOSMAYBEENDDIRWRITE.W
+; already exists
+@ERREX  PLY
+        EXITDOSRAM
+        PLY
+        PLY
+        PLX
+        SEC
+        LDA     #DOS_ERR_CREATE_ERROR.W
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $36 = delete (empty) directory
 DOSRMDIR:
+        PHX
+        PHY
+        JSR     DOSCOPYBXSTRBUFUC.W
+        ENTERDOSRAM
+        ACC8
+        LDA     #$80
+        STA     DOSIOBANK.B
+        ACC16
+        JSR     DOSPAGEINDIRAPI.W
+        LDX     #0
+        JSR     DOSEXTRACTRESOLVEPATH.W
+        BCS     @ERRM
+        PHX
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        PLX
+        BCS     @ERRM
+        JSR     DOSRESOLVEFILE.W
+        BCS     @ERRM
+        JSR     DOSREMOVEDIRECTORY.W
+        BCS     @ERRM
+        EXITDOSRAM
+        PLY
+        PLX
+        CLC
+        JMP     DOSMAYBEENDDIRWRITE.W
+@ERRM   EXITDOSRAM
+@ERR    PLY
+        PLX
+        SEC
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $32 = update file entry
 DOSUPDDIRENT:
@@ -466,12 +700,12 @@ DOSFILEREAD:
         CLC
 ++      EXITDOSRAM
 +++     PLX
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 @ERR    PLA
         EXITDOSRAM
         SEC
         PLX
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $22 = write to file
 DOSFILEWRITE:
@@ -527,12 +761,12 @@ DOSFILEWRITE:
         CLC
 ++      EXITDOSRAM
 +++     PLX
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 @ERR    PLA
         EXITDOSRAM
         SEC
         PLX
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $23 = get file size
 DOSFILEGETSIZE:
@@ -549,7 +783,7 @@ DOSFILEGETSIZE:
         JSR     DOSFILEDOGETSIZE.w
 ++      EXITDOSRAM
 +++     PLX
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $24 = seek file
 DOSFILESEEK:
@@ -566,7 +800,7 @@ DOSFILESEEK:
         JSR     DOSFILEDOSEEK.w
 ++      EXITDOSRAM
 +++     PLX
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $25 = truncate file at pointer
 DOSFILETRUNC:
@@ -583,7 +817,7 @@ DOSFILETRUNC:
         JSR     DOSFILEDOTRUNC.w
 ++      EXITDOSRAM
 +++     PLX
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $30 = set current directory
 DOSSETDIR:
@@ -599,15 +833,15 @@ DOSSETDIR:
         LDA     #$FF
         STA     DOSUPDATEPATH.B
         JSR     DOSSHIFTINPATH.W
-@DBG1
+
         ACC16
-        JSR     DOSPAGEINDIR.W
+        JSR     DOSPAGEINDIRAPI.W
         LDX     #0
         JSR     DOSRESOLVEPATH.W
         BCS     @ERRM
         JSR     DOSPAGEOUTDIR.W
         JSR     DOSSHIFTOUTPATH.W
-@DBG2
+
         LDA     DOSTMPX1.B
         STA     DOSACTIVEDRIVE.B
         STA     DOSREALDRIVE.B
@@ -626,7 +860,7 @@ DOSSETDIR:
 @ERR    PLY
         PLX
         SEC
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $31 = get current directory
 DOSGETDIR:
@@ -677,4 +911,5 @@ DOSGETFREESPACE:
         LDX     FSMBCACHE+$10.W
 ++      EXITDOSRAM
         PLY
-        RTS
+        JMP     DOSMAYBEENDDIRWRITE.W
+

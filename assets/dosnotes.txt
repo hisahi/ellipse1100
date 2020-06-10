@@ -153,7 +153,7 @@ ELLIPSE DOS API
             Out:    A=0 if no characters available
                     <>0 if characters available
         Flush stdin                         $0C
-        Flush all open files                $0D
+        Flush all disk buffers (not files)  $0D
         Set active drive                    $0E
             In      Al=drive number >0 (preserved)
         Open file                           $0F
@@ -185,7 +185,7 @@ ELLIPSE DOS API
             In      B:X=address to pathname 
                     Y(low)=attributes
                     Al=mode (1=read, 2=write, 3=read/write)
-            Out     success C=0     A=file handle 
+            Out     success C=0     X=file handle 
         Rename matching file                $17
             In      B:X=address to pathname 
                     B:Y=address to new filename
@@ -297,7 +297,7 @@ ELLIPSE DOS API
         Move file entry                     $37
             In      B:X=address to pathname 
                     B:Y=address to dirname
-            Out     success C=0
+            Out     success C=0     (can only move between dirs on same volume)
                     failure C=1     A=error
         Launch program                      $38
             In      B:X=address to executable

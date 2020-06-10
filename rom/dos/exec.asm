@@ -303,20 +303,22 @@ DOSTERMINATE:           ; $00 = terminate program
         STY     DOSTMP8.B
         LDA     #$0020
         STA     DOSTMP7.B
+@CLOSEFILEHANDLES:
         ; close file handles
         PHY
         LDY     #0
--       LDA     (DOSTMP7.B),Y
+-       LDA     [DOSTMP7.B],Y
         CMP     #DOSFILETABLE
         BCC     +
         TAX
         PHY
+        LDA     #$FFFF
         JSR     DOSCLOSEHANDLE.W
         PLY
 +       INY
         INY
         CPY     #$0020
-        BCS     -
+        BCC     -
         PLY
         ; TODO: free allocated blocks
         ; free program bank

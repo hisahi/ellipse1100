@@ -34,11 +34,18 @@ DOS.SYS: dos/dossys.obj
 floppies/edos.obj: floppies/dos.asm dos/*.asm
 	$(AS) $(AFLAGS) -o $@ $<
 
-dos/hello.obj: dos/hello.asm
+dos/hello.obj: dos/progs/hello.asm
 	$(AS) $(AFLAGS) -o $@ $<
 HELLO.COM: dos/hello.obj
 	$(LD) $(LDFLAGS) -b hello.lnk $@
-
+dos/touch.obj: dos/progs/touch.asm
+	$(AS) $(AFLAGS) -o $@ $<
+TOUCH.COM: dos/touch.obj
+	$(LD) $(LDFLAGS) -b touch.lnk $@
+dos/reboot.obj: dos/progs/reboot.asm
+	$(AS) $(AFLAGS) -o $@ $<
+REBOOT.COM: dos/reboot.obj
+	$(LD) $(LDFLAGS) -b reboot.lnk $@
 dos/console.obj: dos/console.asm dos/consolec.asm
 	$(AS) $(AFLAGS) -o $@ $<
 CONSOLE.COM: dos/console.obj
@@ -49,7 +56,8 @@ floppies/elfsdisk.obj: floppies/elfsdisk.asm
 
 elfsdisk.img: makeelfs floppies/elfsdisk.obj floppies/elfsdisk.fs
 	$(LD) $(LDFLAGS) elfsdisk.lnk $@ && ./makeelfs elfsdisk.img floppies/elfsdisk.fs
-edos.img: makeelfs DOS.SYS CONSOLE.COM HELLO.COM \
+edos.img: makeelfs DOS.SYS CONSOLE.COM \
+			HELLO.COM TOUCH.COM REBOOT.COM \
 			dos/dossys.obj floppies/edos.obj floppies/dos.fs
 	$(LD) $(LDFLAGS) edos.lnk $@ && ./makeelfs edos.img floppies/dos.fs
 
