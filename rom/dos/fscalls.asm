@@ -33,7 +33,7 @@ DOSPAGEINDIRAPI:
         PHX
         PHY
         JSR     DOSPAGEINACTIVEDRIVE.W
-        LDA     DOSACTIVEDIR.W
+        LDA     DOSACTIVEDIR.B
         JSR     DOSPAGEINACTIVEDIR.W
         PLY
         PLX
@@ -83,6 +83,7 @@ DOSPACKFIS:
         LDA     DOSBANKD|DOSSTRINGCACHE+OFF*2.L,X
         STA     $0030+OFF*2,Y
 .ENDR
+DOSPACKFISPART:
         PHY
         PHX
         LDA     DOSLD|DOSNEXTFILEOFF.L
@@ -190,10 +191,9 @@ DOSFINDNEXT:
         JSR     DOSRESOLVENEXTFILE.W
         PLX
         BCS     @ERRM
-        JSR     DOSWIPEBUFFERLEFTOVER.W
         EXITDOSRAM
         PLY
-        JSR     DOSPACKFIS.W
+        JSR     DOSPACKFISPART.W
         PLX
         CLC
         JMP     DOSMAYBEENDDIRWRITE.W
@@ -233,6 +233,15 @@ DOSFINDOPENHANDLESLOT:
         RTS
 
 .ACCU 16
+DOSOPENFILEALT:
+        PHX
+        PHY
+        AND     #$FF
+        STA     DOSLD|DOSTMPX3.L
+        JSR     DOSCOPYBXSTRBUFUC.W
+        LDA     15,S                     ; old program bank
+        BRA     DOSOPENFILE@GO
+
 ; $0F = open file
 DOSOPENFILE:
         PHX
@@ -241,7 +250,7 @@ DOSOPENFILE:
         STA     DOSLD|DOSTMPX3.L
         JSR     DOSCOPYBXSTRBUFUC.W
         LDA     9,S                     ; old program bank
-        AND     #$FF
+@GO     AND     #$FF
         STA     DOSLD|DOSTMPX1.L
         JSR     DOSFINDOPENHANDLESLOT.W
         BCS     @ERR
@@ -418,7 +427,8 @@ DOSFLUSHFILES:
 DOSCREATEFILE:
         PHX
         PHA
-        JSR     DOSOPENFILE.W
+        ORA     #$02
+        JSR     DOSOPENFILEALT.W
         BCS     @CHECKERR
         PLA
         PLX
@@ -436,14 +446,14 @@ DOSCREATEFILE:
 ++      EXITDOSRAM
 +++     PLX
         JMP     DOSMAYBEENDDIRWRITE.W
-@CHECKERR
+@CHECKERR:
         CMP     #DOS_ERR_FILE_NOT_FOUND.W
         BEQ     @CREATE
         PLX
         PLX
         SEC
         JMP     DOSMAYBEENDDIRWRITE.W
-@CREATE
+@CREATE:
         PLA
         PLX
         PHX
@@ -550,6 +560,63 @@ DOSRENAMEFILE:
 
 ; $37 = move file entry
 DOSMOVEENT:
+        PHX
+        PHY
+        JSR     DOSCOPYBXSTRBUFUC.W
+        ENTERDOSRAM
+        ACC8
+        LDA     #$80
+        STA     DOSIOBANK.B
+        ACC16
+        JSR     DOSPAGEINDIRAPI.W
+        LDX     #0
+        JSR     DOSEXTRACTRESOLVEPATH.W
+        BCS     @ERRM
+        PHX
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        PLX
+        BCS     @ERRM
+        JSR     DOSRESOLVEFILE.W
+        BCS     @ERRM
+        JSR     DOSSTOREFILEENTFORMOVE.W
+        EXITDOSRAM
+        LDA     1,S ; old Y
+        TAX
+        JSR     DOSCOPYBXSTRBUFUC.W
+        ENTERDOSRAM
+        JSR     DOSPAGEINDIRAPI.W
+        LDX     #0
+        JSR     DOSRESOLVEPATH.W
+        BCS     @ERRM
+        LDA     DOSACTIVEDRIVE.B
+        CMP     DOSTMPX1.B
+        BNE     @ERRND
+        LDA     DOSACTIVEDIR.B
+        CMP     DOSTMPX2.B
+        BEQ     @NOMOVE
+        JSR     DOSMOVELOADFNSTRBUF.W
+        LDX     #0
+        JSR     DOSRESOLVEFILE.W
+        BCS     +
+        JSR     DOSDODELETEFILE.W
+        BCS     @ERRM
+        BRA     ++
++       CMP     #DOS_ERR_FILE_NOT_FOUND.W
+        BNE     @ERRM
+++      JSR     DOSDOMOVEENT.W
+        BCS     @ERRM
+@NOMOVE:
+        EXITDOSRAM
+        PLY
+        PLX
+        CLC
+        JMP     DOSMAYBEENDDIRWRITE.W
+@ERRND  LDA     #DOS_ERR_BAD_PARAMETER
+@ERRM   EXITDOSRAM
+@ERR    PLY
+        PLX
+        SEC
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $33 = create directory
 DOSMKDIR:
@@ -681,7 +748,7 @@ DOSFILEREAD:
         BCC     @ENDLOOP
         PHA
         LDA     DOSTMPX1.B
-        BEQ     @ERR
+        BEQ     @ERRY
         PLA
 @ENDLOOP:
         LDA     DOSTMPX1.B
@@ -701,6 +768,7 @@ DOSFILEREAD:
 ++      EXITDOSRAM
 +++     PLX
         JMP     DOSMAYBEENDDIRWRITE.W
+@ERRY   PLY
 @ERR    PLA
         EXITDOSRAM
         SEC
@@ -912,4 +980,33 @@ DOSGETFREESPACE:
 ++      EXITDOSRAM
         PLY
         JMP     DOSMAYBEENDDIRWRITE.W
+
+; $3C = read drive FSMB
+DOSREADFSMB:
+        ENTERDOSRAM
+        AND     #$FF
+        BEQ     +
+        STA     DOSACTIVEDRIVE.B
++       STX     DOSTMP1.B
+        LDA     3,S
+        AND     #$FF
+        STA     DOSTMP2.B
+        PHX
+        PHY
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        BCS     +
+        LDX     #$0200
+        TXY
+-       DEX
+        DEX
+        LDA     FSMBCACHE.W,X
+        DEY
+        DEY
+        STA     [DOSTMP1.B],Y
+        BPL     -
+        CLC
++       PLY
+        PLX
+        EXITDOSRAM
+        RTS
 

@@ -58,12 +58,20 @@ DOSINITMISCBUFFERS:
 -       STA     DOSFREEBANKS.W,X
         DEX
         BPL     -
-        LDA     #$FF
+        LDA     #$01
         STA     DOSFREEBANKS.W,X
         STA     DOSFREEBANKS.W+1,X
         ACC16
         RTS
 
+DOSALLOCRAMBANK_MEM:
+        ACC8
+        LDA     #$05
+        BRA     DOSALLOCRAMBANK_EXEC@STA
+DOSALLOCRAMBANK_EXEC:
+        ACC8
+        LDA     DOSPROGBANK.B
+@STA    STA     DOSTMP1.B
 ; assumes DB=DOSBANKD
 ; C=1 if no more RAM banks available
 ; C=0 if A is next free bank 
@@ -81,7 +89,7 @@ DOSALLOCRAMBANK:
         SEC
         RTS
 .ACCU 8
-+       LDA     #$FF
++       LDA     DOSTMP1.B
         STA     DOSFREEBANKS.W,X
         ACC16
         TXA
@@ -169,6 +177,227 @@ DOSCHARUC:
         AND     #$DF
 +       RTS
 
+.ACCU 8
+DOSALLOCMEM_BANKINIT:
+        LDA     #$05
+        STA     DOSFREEBANKS.W,Y
+        PHB
+        PHA
+        PLB
+        ACC16
+        STZ     $0000.W
+        STZ     $0002.W
+        STZ     $0004.W
+        STZ     $0006.W
+        PLB
+        BRA     DOSALLOCMEM_INT_BANK
+
+.ACCU 16
+; Y=bank&$7F
+; C=0 X=offset
+; C=1
+;
+; memory allocation
+;               $00     job ID          $00     if free
+;               $04     next block header or 0 if end of chain
+;               $06     previous block header or 0 if beginning
+;
+DOSALLOCMEM_INT_BANK:
+        ACC8
+        PHB
+        LDA     DOSFREEBANKS.W,Y
+        BEQ     DOSALLOCMEM_BANKINIT
+        CMP     #5
+        BEQ     @CHECKOK
+        BRL     @NOTAVL
+@CHECKOK:
+        TYA
+        PHA
+        PLB
+        LDX     #0
+        ACC16
+@BANKLOOP:
+        LDA     $0000.W,X
+        BNE     @NOTFREE
+
+        TXA
+        EOR     #$FFFF
+        INC     A
+        SEC
+        SBC     #$08
+        CLC
+        ADC     $0004.W,X
+
+        CMP     DOSLD|DOSTMP1.L
+        BCS     @FOUNDBLK
+
+@NOTFREE:
+        LDA     $0004.W,X
+        BNE     +
+        BRL     @NOTAVL
++       TAX
+        BRA     @BANKLOOP
+@FOUNDBLK:
+        PHA
+        SEC
+        SBC     DOSLD|DOSTMP1.L
+        CMP     #8
+        BCC     @NOADJ
+        PLA
+
+        TXA
+        CLC
+        ADC     DOSLD|DOSTMP1.L
+        PHX
+        TAX
+        STZ     $0000.W,X
+        STZ     $0002.W,X
+        LDA     1,S             ; old X
+        STA     $0006.W,X
+        PHX
+        TAX
+        LDA     $0004.W,X
+        PLX
+        STA     $0004.W,X
+        STA     DOSTMP2.B
+        TXA
+        PLX
+        STA     $0004.W,X
+        PHX
+        LDX     DOSTMP2.B
+        BEQ     +
+        STA     $0006.W,X
++       PLX
+
+        PHA
+@NOADJ:
+        LDA     DOSLD|DOSPROGBANK.L
+        AND     #$FF
+        STA     $0000.W,X
+        PLA
+        PLB
+        CLC
+        RTS
+@NOTAVL:
+        PLB
+        ACC16
+        SEC
+        RTS
+
+.ACCu 16
+DOSFREEMEM_INT:
+        ACC8
+        PHB
+        TYA
+        PHA
+        STA     DOSLD|DOSTMP1.L
+        PLB
+        ACC16
+
+        ; is previous block free? merge if so
+        LDA     $0006.W,X
+        BEQ     +++
+        LDA     $0004.W,X
+        STA     DOSLD|DOSTMP2.L
+        PHX
+        TAX
+        LDA     $0000.W,X
+        BNE     ++
+        LDA     DOSLD|DOSTMP2.L
+        STA     $0004.W,X
+
+        BEQ     +
+        PHX
+        TAX
+        LDA     1,S
+        STA     $0006.W,X
+        PLX
++
+        PLA
+        BRA     +++
+++      PLX
++++
+        ; is next block free? merge if so
+        LDA     $0004.W,X
+        BEQ     +++
+        PHX
+        TAX
+        LDA     $0000.W,X
+        BNE     ++
+        LDA     $0004.W,X
+        STA     DOSLD|DOSTMP2.L
+        BEQ     +
+        PHX
+        TAX
+        LDA     3,S
+        STA     $0006.W,X
+        PLX
++
+        LDA     DOSLD|DOSTMP2.L
+        STA     $0004.W,X
+++      PLX
++++
+        ; mark block as free
+        STZ     $0000.W,X
+
+        ; is memory bank all free now? free if it so
+        CLC
+        LDX     #0
+        BNE     +
+        LDA     $0004.W,X
+        BNE     +
+        LDA     $0006.W,X
+        BNE     +
+        SEC
++
+        ACC16
+        PLB
+        BCC     +
+        LDA     DOSLD|DOSTMP1.L
+        AND     #$FF
+        TAX
+        JSR     DOSUNALLOCRAMBANK.W
++       CLC
+        RTS
+
 .ACCU 16
 DOSALLOCMEM:            ; $3A = allocate memory
+        ENTERDOSRAM
+        CPX     #65529
+        BCS     @NOMEM
+        STX     DOSTMP1.B
+
+        LDY     #0
+-       JSR     DOSALLOCMEM_INT_BANK
+        BCC     @OK
+        INY
+        CPY     #16
+        BCS     -
+
+@NOMEM  LDA     #DOS_ERR_OUT_OF_MEMORY
+        EXITDOSRAM
+        SEC
+        RTS
+
+@OK     TYA
+        AND     #$007F
+        ORA     #$0080
+        TAY
+        EXITDOSRAM
+        CLC
+        RTS
+
 DOSFREEMEM:             ; $3B = free memory allocation
+        TXA
+        PHX
+        PHY
+        ENTERDOSRAM
+        SEC
+        SBC     #$08
+        TAX
+        JSR     DOSFREEMEM_INT.W
+        EXITDOSRAM
+        PLY
+        PLX
+        CLC
+        RTS

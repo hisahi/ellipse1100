@@ -32,4 +32,4 @@ BEGINNING:
         ACC8
         LDA     #$FF
         STA     $700000.L
-        
+        STP

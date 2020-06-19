@@ -26,6 +26,11 @@
 
 .INCLUDE "doscomhd.asm"
 
+.DEFINE REMBUF $0C
+.DEFINE FSMBBUF $F200
+.DEFINE TMPBUF $F500
+.DEFINE WC2BUF $F600
+.DEFINE WCBUF $F700
 .DEFINE FILEBUF $F800
 .DEFINE FILEBUFSIZE $0400
 .DEFINE FILETMP $FC00
@@ -53,6 +58,7 @@ DATETIMEQUERY:
         JSR     COMMAND_TIME.W
 
 @ALREADYSET:
+        STZ     FSMBDRV.W
 
 BEGINNINGMSG:
         JSR     COMMAND_VER
@@ -119,7 +125,7 @@ CMDLOOP:
 @CMDBS
         JSR     CMDVALIDPATHFN.W
         BCS     +
-        JSR     CMDSEEKRUN.W
+        JSR     COMSEEKRUN.W
 +       BRA     @CMDOK
 
 .ACCU 8
@@ -138,7 +144,7 @@ CMDLOOP:
         BCC     @CMDOK
         JSR     CMDVALIDPATHFN.W
         BCS     +
-        JSR     CMDSEEKRUN.W
+        JSR     COMSEEKRUN.W
         BCC     @CMDOK
 +       JSR     COMMAND_UNKNOWN.W
 @CMDOK:
@@ -607,6 +613,9 @@ COMMAND_UNKNOWN:
 ; C=1 if disk error
 COMMAND_ERROR:
         ACC16
+        CMP     #0
+        BMI     +++
+
         TAX
         LDA     COMMANDERRORMSGTABLEDISK.W,X
         AND     #$FF
@@ -634,7 +643,7 @@ COMMAND_ERROR:
         DOSCALL
         LSR     ERRTMP.W
 
-        LDA     #$020D
++++     LDA     #$020D
         DOSCALL
         RTS
 
@@ -643,7 +652,13 @@ COMMAND_ERROR_FEW:
         LDA     #$1900
         LDX     #CMDPARFEWERR.W
         DOSCALL
+        RTS
 
+COMMAND_ERROR_MANY:
+        ACC16
+        LDA     #$1900
+        LDX     #CMDPARMANYERR.W
+        DOSCALL
         RTS
 
 .ACCU 8
@@ -654,6 +669,13 @@ CMDUPPERCASE:
         BCS     +
         AND     #$DF
 +       RTS
+
+CMDUPPERCASE16:
+        ACC8
+        JSR     CMDUPPERCASE.W
+        ACC16
+        AND     #$FF
+        RTS
 
 CMDFINDRUN:
         PHY
@@ -701,6 +723,8 @@ CMDFINDRUN:
         PLY
 @CMDJMP:
         JSR     $0000.W
+        LDA     #$0D00
+        DOSCALL
         CLC
         RTS
 @NOTFOUND:
@@ -708,12 +732,11 @@ CMDFINDRUN:
         SEC
         RTS
 
-CMDSEEKRUN:
+COMSEEKRUN:
         ACC16
         LDA     #$1100
         LDX     #PATHBUF.W
         LDY     #FISBUF.W
-@DBG
         DOSCALL
         BCS     @ERR
         BRA     @CHECKFILE
@@ -815,6 +838,17 @@ CMDFISEXECCOM:
         SEC
         RTS
 
+.ACCU 16
+CMDLOADFSMB:
+        CMP     FSMBDRV.W
+        BEQ     +
+        STA     FSMBDRV.W
+        AND     #$FF
+        ORA     #$3C00
+        LDX     #FSMBBUF.W
+        DOSCALL
++       RTS
+
 COMMAND_BUILD_XPATH:
         ACC8
         LDA     NAMEBUF.W  
@@ -887,6 +921,179 @@ COMMAND_BUILD_XPATH:
         STA     NAMEBUF.W
         RTS
 
+CMDPREBUILDWCPATH:
+        ACC8
+        LDY     #0
+-       LDA     $0000.W,X
+        JSR     CMDUPPERCASE.W
+        STA     WCBUF.W,Y
+        CMP     #0
+        BEQ     +
+        INX
+        INY
+        CPY     #255
+        BCC     -
++       LDA     #0
+        STA     WCBUF.W,Y
+
+        DEY
+-       LDA     WCBUF.W,Y
+        CMP     #'\'
+        BEQ     +
+        DEX
+        DEY
+        BPL     -
++       INY
+        LDA     WCBUF.W
+        BEQ     +
+        LDA     WCBUF+1.W
+        CMP     #':'
+        BNE     +
+        CPY     #2
+        BCS     +
+        LDY     #2
+        INX
+        INX
++
+        STY     WCPATH.W
+
+        ACC16
+        RTS
+
+CMDBUILDWCPATHX:
+        ACC8
+        LDY     WCPATH.W
+
+-       LDA     $0000.W,X
+        BEQ     ++
+        CMP     #' '
+        BEQ     +
+        JSR     CMDUPPERCASE.W
+        STA     WCBUF.W,Y
+        INY
++       INX
+        BNE     -
+++
+        LDA     #0
+        STA     WCBUF.W,Y
+        ACC16
+        LDX     #WCBUF.W
+        RTS
+
+CMDBUILDWCPATHFIS:
+        ACC8
+        LDY     WCPATH.W
+        LDX     #0
+
+-       LDA     FISBUF+2.W,X
+        CMP     #' '
+        BEQ     +
+        JSR     CMDUPPERCASE.W
+        STA     WCBUF.W,Y
+        INY
++       INX
+        CPX     #14
+        BCC     -
+++
+        LDA     #0
+        STA     WCBUF.W,Y
+        ACC16
+        LDX     #WCBUF.W
+        RTS
+
+CMDPREBUILDWC2PATH:
+        ACC8
+        LDY     #0
+-       LDA     $0000.W,X
+        JSR     CMDUPPERCASE.W
+        STA     WC2BUF.W,Y
+        CMP     #0
+        BEQ     +
+        INX
+        INY
+        CPY     #255
+        BCC     -
++       LDA     #0
+        STA     WC2BUF.W,Y
+
+        DEY
+-       LDA     WC2BUF.W,Y
+        CMP     #'\'
+        BEQ     +
+        DEX
+        DEY
+        BPL     -
++       INY
+        LDA     WC2BUF.W
+        BEQ     +
+        LDA     WC2BUF+1.W
+        CMP     #':'
+        BNE     +
+        CPY     #2
+        BCS     +
+        LDY     #2
+        INX
+        INX
++
+        STY     WC2PATH.W
+
+        ACC16
+        RTS
+
+CMDBUILDWC2PATHX:
+        ACC8
+        LDY     WC2PATH.W
+
+-       LDA     $0000.W,X
+        BEQ     ++
+        CMP     #' '
+        BEQ     +
+        JSR     CMDUPPERCASE.W
+        STA     WC2BUF.W,Y
+        INY
++       INX
+        BNE     -
+++
+        LDA     #0
+        STA     WC2BUF.W,Y
+        ACC16
+        LDX     #WC2BUF.W
+        RTS
+
+CMDCHECKCOMMAND_ERROR_MANY:
+        ACC8
+        PHX
+-       LDA     CONBUF.W,X
+        BEQ     +
+        CMP     #' '
+        BEQ     @TOOMANY
+        INX
+        BRA     -
++       PLX
+        RTS
+@TOOMANY:
+        ACC16
+        PLX
+        PLA
+        JMP     COMMAND_ERROR_MANY
+
+CMD_COPYPAR2:
+        ACC8
+        LDY     #0
+        DEY
+-       INY
+        INX
+        LDA     $0000.W,X
+        STA     XPATHBUF.W,Y
+        BEQ     +
+        CMP     #' '
+        BNE     -
+        ACC16
+        PLA
+        PLA
+        JMP     COMMAND_ERROR_MANY
++       RTS
+
 .INCLUDE "dos/consolec.asm"
 
 .ACCU 8
@@ -923,9 +1130,29 @@ DIRDRIVENUM:
         .DW     0
 DIROLDDRIVE:
         .DW     0
+WCPATH:
+        .DW     0
+WC2PATH:
+        .DW     0
 WIDENUM1:
         .DW     0
 WIDENUM2:
+        .DW     0
+MKFNTMP1:
+        .DW     0
+MKFNTMP2:
+        .DW     0
+MKFNTMP3:
+        .DW     0
+COPYTMP1:
+        .DW     0
+COPYTMP2:
+        .DW     0
+COPYTMP3:
+        .DW     0
+COPYTMP4:
+        .DW     0
+FSMBDRV:
         .DW     0
 
 BCDTABLEL:
@@ -987,8 +1214,10 @@ CMDMSGECHOTON:
         .DB     "ON.", 0
 COMMANDPAUSEMSG:
         .DB     "Press any key to continue...", 0
+CMDDELWCMSGPROMPT:
+        .DB     ", are you sure (Y/N)?", 0
 COMMANDDIRHEADER1:
-        .DB     13, " Volume of drive "
+        .DB     13, " Volume in drive "
 COMMANDDIRHEADER1_FMT:
         .DB     "$: is <", 0
 COMMANDDIRHEADER2:
@@ -1011,6 +1240,16 @@ DOSMSGDIRSPACE:
         .DB     0
 CMDWIDEBCDBUFFER:
         .DB     "$$$$$$$$$$", 0
+COMMANDCOPYOKMSG:
+        .DB     " file(s) copied", 13, 0
+COMMANDMOVEOKMSG:
+        .DB     " file(s) moved", 13, 0
+DOSCOPYALREADYEXISTS:
+        .DB     " already exists, overwrite (Y/N)?", 0
+COMMANDVOLSN:
+        .DB     ">", 13, " Identification Number is ", 0
+CMDHEXDIGITS:
+        .DB     "0123456789ABCDEF"
 
 COMMANDMSGERROR_DRIVE:
         .DB     "Drive "
@@ -1057,7 +1296,7 @@ COMMANDMSGERROR_15:
 COMMANDMSGERROR_16:
         .DB     "Seek error", 0
 COMMANDMSGERROR_17:
-        .DB     "Cannot create file", 0
+        .DB     "File already exists, or cannot create file", 0
 
 COMMANDERRORMSGTABLE:
         .DW     COMMANDMSGERROR_00
@@ -1146,6 +1385,8 @@ COMMANDTABLE_C:
         .DW     COMMAND_CHDIR
         .DB     "LS", 0
         .DW     COMMAND_CLS
+        .DB     "OPY", 0
+        .DW     COMMAND_COPY
         .DB     0
 COMMANDTABLE_D:
         .DB     "ATE", 0
@@ -1182,6 +1423,8 @@ COMMANDTABLE_M:
         .DW     COMMAND_MKDIR
         .DB     "KDIR", 0
         .DW     COMMAND_MKDIR
+        .DB     "OVE", 0
+        .DW     COMMAND_MOVE
         .DB     0
 COMMANDTABLE_N:
         .DB     0
@@ -1198,9 +1441,9 @@ COMMANDTABLE_R:
         .DW     COMMAND_RMDIR
         .DB     "EM", 0
         .DW     COMMAND_REM
-        .DB     "EN", 0
-        .DW     COMMAND_RENAME
         .DB     "ENAME", 0
+        .DW     COMMAND_RENAME
+        .DB     "EN", 0
         .DW     COMMAND_RENAME
         .DB     "MDIR", 0
         .DW     COMMAND_RMDIR
@@ -1218,6 +1461,8 @@ COMMANDTABLE_U:
 COMMANDTABLE_V:
         .DB     "ER", 0
         .DW     COMMAND_VER
+        .DB     "OL", 0
+        .DW     COMMAND_VOL
         .DB     0
 COMMANDTABLE_W:
         .DB     0

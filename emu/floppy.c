@@ -204,6 +204,7 @@ static inline void floppy_write_sector(floppy_drive* drive)
     memcpy(drive->disk + drive->disk_offset,
            drive->buffer, _FLOPPY_SECTOR_SIZE);
     drive->status = FLOPPY_STATUS_DISK_WRITE;
+    drive->seek_ongoing = 1;
     drive->seek_time = floppy_sector_rw_time(floppy_sector_count(drive));
 }
 
@@ -276,6 +277,7 @@ static void floppy_seek(floppy_drive* drive, int write)
     drive->disk_offset = ((drive->side * _FLOPPY_TRACKS + target_track)
                         * floppy_sector_count(drive) + drive->target_sector)
                         * _FLOPPY_SECTOR_SIZE;
+    drive->seek_ongoing = 1;
     drive->seek_time = floppy_seek_time_to_track(drive->track,
                                                  target_track);
     drive->seek_time += floppy_seek_time_to_sector(drive->sector,
@@ -291,6 +293,7 @@ inline static void floppy_seek_read(floppy_drive* drive)
     if (drive->status == FLOPPY_STATUS_SEEK)
     {
         drive->status = FLOPPY_STATUS_SEEK_READ;
+        drive->seek_ongoing = 1;
         drive->seek_time += floppy_sector_rw_time(floppy_sector_count(drive));
 #if _FLOPPY_DEBUG
         printf("Seeking floppy drive for reading, will take %d ms\n",
@@ -336,7 +339,7 @@ static inline void floppy_control(floppy_drive* drive, BYTE b)
     case 2: floppy_seek_write(drive); break;
     case 3: 
         floppy_seek(drive, 0);
-        if (drive->status == FLOPPY_STATUS_SEEK && drive->seek_time == 0)
+        if (drive->status == FLOPPY_STATUS_SEEK && drive->seek_time <= 0)
             floppy_seek_done(drive);
         break;
     }
@@ -436,12 +439,13 @@ void floppy_write(int drivenum, int port, BYTE data)
 
 static inline void floppy_tick_drive(floppy_drive* drive, int deltaMs)
 {
-    if (drive->seek_time > 0)
+    if (drive->seek_ongoing)
     {
         drive->seek_time -= deltaMs;
         if (drive->seek_time <= 0)
         {
             drive->seek_time = 0;
+            drive->seek_ongoing = 0;
             floppy_seek_done(drive);
         }
     }
@@ -459,9 +463,11 @@ void floppy_reset(void)
     drive1.error = FLOPPY_ERROR_NONE;
     drive1.doirq = 0;
     drive1.seek_time = 0;
+    drive1.seek_ongoing = 0;
 
     drive2.status = FLOPPY_STATUS_READY;
     drive2.error = FLOPPY_ERROR_NONE;
     drive2.doirq = 0;
-    drive1.seek_time = 0;
+    drive2.seek_time = 0;
+    drive2.seek_ongoing = 0;
 }

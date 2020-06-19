@@ -56,6 +56,7 @@ ELLIPSE LINEAR FILE SYSTEM (ELFS)
                                 $0001       Ellipse 960 KB floppy
                                 $0002       Ellipse 1280 KB floppy
                                 $0003       Ellipse 1600 KB floppy
+            $00A:$00B       volume identification number
             $010:$011       log2(bytes per chunk); always $000A for Ellipse DOS
                                     (and nothing else is supported by it)
             $012:$013       maximum available chunk (N)
@@ -181,11 +182,12 @@ ELLIPSE DOS API
             In      B:X=address to pathname 
             Out     success C=0     A=number of files deleted
                     failure C=1     A=error
-        Create or truncate file             $16
+        Create/truncate and open file       $16
             In      B:X=address to pathname 
                     Y(low)=attributes
                     Al=mode (1=read, 2=write, 3=read/write)
             Out     success C=0     X=file handle 
+                    failure C=1     A=error
         Rename matching file                $17
             In      B:X=address to pathname 
                     B:Y=address to new filename
@@ -312,7 +314,7 @@ ELLIPSE DOS API
         Get exit code                       $39
             Out     A=exit code
         Allocate memory                     $3A
-            In      A=bytes to allocate
+            In      X=bytes to allocate
             Out     success C=0     X=offset    Y=bank
                     failure C=1     A=error
         Free memory allocation              $3B
@@ -320,7 +322,10 @@ ELLIPSE DOS API
             Out     success C=0
                     failure C=1
         Read drive FSMB                     $3C
-        Write drive FSMB                    $3D
+            In      Al=drive number
+                    X=destination address
+            Out     success C=0
+                    failure C=1
         Get active drive                    $3E
             Out     A=active drive number >0
         Get Ellipse DOS version             $3F
@@ -393,8 +398,9 @@ CONSOLE.COM internal commands
         IF
         MKDIR/MD
         MOVE
-        PATH
+        PATH(?)
         PAUSE
+        PROMPT
         REM
         RENAME/REN
         RMDIR/RM

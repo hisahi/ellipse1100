@@ -45,6 +45,7 @@ COMMAND_CLS:
         LDX     #0
         LDY     #0
         JSL     $013FFC ; move cursor
+        ACC16
         RTS
 
 .ACCU 16
@@ -583,15 +584,29 @@ COMMAND_DIR_HEADER:
         ACC8
         LDA     $0000.W,X
         STA     COMMANDDIRHEADER1_FMT.W
-
         ACC16
+        AND     #$1F
         PHX
+        JSR     CMDLOADFSMB.W
+        PLX
+        PHX
+
         LDA     #$1900
         LDX     #COMMANDDIRHEADER1
         DOSCALL
 
         ; volume label
-        ;TODO
+        LDX     #14
+-       LDA     FSMBBUF+$20.W,X
+        STA     NAMEBUF.W,X
+        DEX
+        DEX
+        BPL     -
+        STZ     NAMEBUF+$10.W
+
+        LDA     #$1900
+        LDX     #NAMEBUF.W
+        DOSCALL
 
         LDA     #$1900
         LDX     #COMMANDDIRHEADER2
@@ -1252,6 +1267,7 @@ COMMAND_TIME_PARSE:
 .ACCU 16
 COMMAND_TYPE:
         ACC8
+        JSR     CMDCHECKCOMMAND_ERROR_MANY
 
         LDA     CONBUF.W,X
         BNE     +
@@ -1262,7 +1278,6 @@ COMMAND_TYPE:
         ADC     #CONBUF.W
         TAX
         LDA     #$0F01
-@DBGOPEN
         DOSCALL
         BCC     +
         JSR     COMMAND_ERROR
@@ -1332,7 +1347,22 @@ COMMAND_ERASE:
         ADC     #CONBUF.W
         TAX
         STX     DIRTMP.W
+        STX     DIRTMP+2.W
         
+-       LDA     $0000.W,X
+        BEQ     +++
+        CMP     #' '
+        BEQ     ++
+        CMP     #'?'
+        BEQ     +
+        CMP     #'*'
+        BEQ     +
+        INX
+        BRA     -
++       JMP     COMMAND_ERASE_WILDCARDS
+++      JMP     COMMAND_ERROR_MANY
++++
+        LDX     DIRTMP.W
         LDY     #FISBUF.W
         LDA     #$1100
         DOSCALL
@@ -1348,6 +1378,294 @@ COMMAND_ERASE:
         LDA     #'\'
         STA     $0000.W,X        
         STZ     $0001.W,X
+        INX
+        STX     DIRTMP+2.W
++       
+        ACC8
+        LDX     DIRTMP.W
+-       INX
+        LDA     $0000.W,X
+        BNE     -
+
+        DEX
+        LDA     $0000.W,X
+        CMP     #'\'
+        BEQ     COMMAND_ERASE_WILDCARDS
+
+        ACC16
+        LDX     DIRTMP.W
+        LDA     #$1300
+        DOSCALL
+        BCC     @OK
+@ERR    JSR     COMMAND_ERROR
+@OK     RTS
+
+COMMAND_ERASE_WILDCARDS:
+        LDX     DIRTMP.W
+        JSR     CMDPREBUILDWCPATH.W
+        
+        LDX     DIRTMP.W
+        LDY     #FISBUF.W
+        LDA     #$1100
+        DOSCALL
+        BCS     @ERR
+
+        LDX     DIRTMP+2.W
+        JSR     CMDBUILDWCPATHX.W
+        
+        LDY     WCPATH.W
+        LDA     WCBUF.W,Y
+        AND     #$FF
+        BNE     +
+        LDA     #$002A
+        STA     WCBUF.W,Y
++
+        LDX     #WCBUF.W
+        LDA     #$1900
+        DOSCALL
+
+        LDX     #CMDDELWCMSGPROMPT.W
+        LDA     #$1900
+        DOSCALL
+
+-       LDA     #$0700
+        DOSCALL
+        BMI     @SKIP
+        JSR     CMDUPPERCASE16.W
+        CMP     #$004E.W ;'N'
+        BEQ     @SKIP
+        CMP     #$0059.W ;'Y'
+        BNE     -
++
+        LDA     #$020D
+        DOSCALL
+
+---     ; only delete normal files (not dirs, hidden, system, readonly...)
+        LDA     FISBUF.W
+        AND     #$0FC0
+        BNE     +
+
+        JSR     CMDBUILDWCPATHFIS.W
+        LDA     #$1300
+        DOSCALL
+        BCS     @ERR
++
+        LDA     #$1200
+        LDY     #FISBUF.W
+        DOSCALL
+        BCC     ---
+
+        BRA     @OK
+@ERR    JSR     COMMAND_ERROR
+@OK     RTS
+@SKIP   LDA     #$020D
+        DOSCALL
+        RTS
+
+.INCLUDE "dos/consolef.asm"
+
+COMMAND_RENAME:
+        ACC8
+
+        LDA     CONBUF.W,X
+        BNE     +
+--      JMP     COMMAND_ERROR_FEW
++       ACC16
+        TXA
+        CLC
+        ADC     #CONBUF.W
+        TAX
+        STX     DIRTMP.W
+        
+        ACC8
+        LDX     DIRTMP.W
+-       INX
+        LDA     $0000.W,X
+        BEQ     --
+        CMP     #' '
+        BNE     -
+
+        PHX
+        STZ     $0000.W,X
+        JSR     CMD_COPYPAR2
+        PLX
+
+        DEX
+        LDA     $0000.W,X
+        CMP     #'\'
+        BEQ     +
+
+        LDX     DIRTMP.W
+-       LDA     $0000.W,X
+        BEQ     ++
+        CMP     #'?'
+        BEQ     +
+        CMP     #'*'
+        BEQ     +
+        INX
+        BRA     -
++       JMP     COMMAND_RENAME_WILDCARDS
+++
+        ACC16
+        LDX     DIRTMP.W
+        LDY     #FISBUF.W
+        LDA     #$1100
+        DOSCALL
+        BCS     @ERR
+
+        JSR     COMMAND_RENAME_MKDESTFN.W
+        LDX     DIRTMP.W
+        LDA     #$1700
+        DOSCALL
+        BCC     @OK
+@ERR    JSR     COMMAND_ERROR
+@OK     RTS
+
+COMMAND_RENAME_WILDCARDS:
+        ACC16
+        LDX     DIRTMP.W
+        JSR     CMDPREBUILDWCPATH.W
+
+        LDX     DIRTMP.W
+        LDY     #FISBUF.W
+        LDA     #$1100
+        DOSCALL
+        BCS     @ERR
+
+---     ; only rename normal files (not dirs, hidden, system, readonly...)
+        LDA     FISBUF.W
+        AND     #$0FC0
+        BNE     +
+
+        JSR     CMDBUILDWCPATHFIS.W
+        PHX
+        JSR     COMMAND_RENAME_MKDESTFN.W
+        PLX
+        LDA     #$1700
+        DOSCALL
+        BCS     @ERR
++
+        LDA     #$1200
+        LDY     #FISBUF.W
+        DOSCALL
+        BCC     ---
+
+        BRA     @OK
+@ERR    JSR     COMMAND_ERROR
+@OK     RTS
+
+COMMAND_MKDIR:
+        ACC8
+        JSR     CMDCHECKCOMMAND_ERROR_MANY
+
+        LDA     CONBUF.W,X
+        BNE     +
+        JMP     COMMAND_ERROR_FEW
++       ACC16
+        TXA
+        CLC
+        ADC     #CONBUF.W
+        TAX
+        LDY     #$0000
+        LDA     #$3600
+        DOSCALL
+        BCC     @OK
+@ERR    JSR     COMMAND_ERROR
+@OK     RTS
+
+COMMAND_RMDIR:
+        ACC8
+        JSR     CMDCHECKCOMMAND_ERROR_MANY
+
+        LDA     CONBUF.W,X
+        BNE     +
+        JMP     COMMAND_ERROR_FEW
++       ACC16
+        TXA
+        CLC
+        ADC     #CONBUF.W
+        TAX
+        LDA     #$3300
+        DOSCALL
+        BCC     @OK
+@ERR    CMP     #DOS_ERR_BAD_PARAMETER
+        BEQ     @NORM
+        JSR     COMMAND_ERROR
+@OK     RTS
+@NORM   LDA     #$1900
+        LDX     #CMDRMDIRFAIL
+        DOSCALL
+        RTS
+
+COMMAND_COPY:
+        STZ     COPYTMP1.W
+        STZ     COPYTMP2.W
+        ACC8
+
+        LDA     CONBUF.W,X
+        BNE     +
+--      JMP     COMMAND_ERROR_FEW
++       ACC16
+        TXA
+        CLC
+        ADC     #CONBUF.W
+        TAX
+        STX     DIRTMP.W
+        
+        ACC8
+        LDX     DIRTMP.W
+-       INX
+        LDA     $0000.W,X
+        BEQ     --
+        CMP     #' '
+        BNE     -
+
+        PHX
+        STZ     $0000.W,X
+        JSR     CMD_COPYPAR2
+
+        ACC16
+        LDX     XPATHBUF.W
+        LDY     #FISBUF.W
+        LDA     #$1100
+        DOSCALL
+        BCS     +
+        LDA     FISBUF.W
+        AND     #$0040
+        BEQ     +
+        ACC8
+        LDX     #$FFFF
+-       INX
+        LDA     XPATHBUF.W,X
+        BNE     -
+        LDA     #'\'
+        STA     XPATHBUF.W,X
+        STZ     XPATHBUF+1.W,X
+        ACC16
++
+        LDX     #XPATHBUF.W
+        JSR     CMDPREBUILDWC2PATH.W
+        PLX
+
+        ACC16
+        LDX     DIRTMP.W
+        LDY     #FISBUF.W
+        LDA     #$1100
+        DOSCALL
+        BCS     +
+        LDA     FISBUF.W
+        AND     #$0040
+        BEQ     +
+        ACC8
+        LDX     DIRTMP.W
+-       INX
+        LDA     $0000.W,X
+        BNE     -
+        LDA     #'\'
+        STA     $0000.W,X        
+        STZ     $0001.W,X
+        INX
+        STX     DIRTMP+2.W
 +       
         ACC8
         LDX     DIRTMP.W
@@ -1369,44 +1687,80 @@ COMMAND_ERASE:
         BEQ     +
         INX
         BRA     -
-+       JMP     COMMAND_ERASE_WILDCARDS
++       JMP     COMMAND_COPY_WILDCARDS
 ++
         ACC16
-        LDX     DIRTMP.W
-        LDA     #$1300
-        DOSCALL
-        BCC     @OK
-@ERR    JSR     COMMAND_ERROR
-@OK     RTS
-
-COMMAND_ERASE_WILDCARDS:
         LDX     DIRTMP.W
         LDY     #FISBUF.W
         LDA     #$1100
         DOSCALL
         BCS     @ERR
 
----
-        ; delete file
+        JSR     COMMAND_MOVE_CPDESTFN.W
+        JSR     COMMAND_COPY_MERGENAMEBUF.W
+        LDX     DIRTMP.W
+        JSR     COMMAND_DO_COPYFILE.W
+        BCC     @OK
+@ERR    JSR     COMMAND_ERROR
+@OK     JMP     COMMAND_COPY_END
 
-        LDA     #$1200
+COMMAND_COPY_WILDCARDS:
+        ACC16
+        INC     COPYTMP2.W
+        LDX     DIRTMP.W
+        JSR     CMDPREBUILDWCPATH.W
+
+        LDX     DIRTMP.W
+        LDY     #FISBUF.W
+        LDA     #$1100
+        BCS     @ERR
+
+---     ; only COPY normal, readonly or system files
+        LDA     FISBUF.W
+        AND     #$0EC0
+        BNE     @SKIP
+        JSR     CMDBUILDWCPATHFIS.W
+        PHX
+        JSR     COMMAND_MOVE_CPDESTFN.W
+        JSR     COMMAND_COPY_MERGENAMEBUF.W
+        PLX
+        JSR     COMMAND_DO_COPYFILE.W
+        BCS     @ERR
+@SKIP   LDA     #$1200
+        LDX     DIRTMP.W
         LDY     #FISBUF.W
         DOSCALL
         BCC     ---
 
         BRA     @OK
 @ERR    JSR     COMMAND_ERROR
-@OK     RTS
+@OK     
 
-COMMAND_RENAME_MKDESTFN:
+COMMAND_COPY_END:
+        ACC16
+        ; total files copied
+        LDA     COPYTMP1.W
+        STA     WIDENUM1.W
+        STZ     WIDENUM2.W
+        JSR     UNPACKWIDEBCD.W
+        ; 10 digits
+        LDA     #$1900
+        LDX     #CMDWIDEBCDBUFFER
+        DOSCALL
+
+        LDA     #$1900
+        LDX     #COMMANDCOPYOKMSG.W
+        DOSCALL
         RTS
 
-COMMAND_RENAME:                 ; TODO
+COMMAND_MOVE:
+        STZ     COPYTMP1.W
+        STZ     COPYTMP2.W
         ACC8
 
         LDA     CONBUF.W,X
         BNE     +
-        JMP     COMMAND_ERROR_FEW
+--      JMP     COMMAND_ERROR_FEW
 +       ACC16
         TXA
         CLC
@@ -1414,6 +1768,62 @@ COMMAND_RENAME:                 ; TODO
         TAX
         STX     DIRTMP.W
         
+        ACC8
+        LDX     DIRTMP.W
+-       INX
+        LDA     $0000.W,X
+        BEQ     --
+        CMP     #' '
+        BNE     -
+
+        PHX
+        STZ     $0000.W,X
+        JSR     CMD_COPYPAR2
+
+        ACC16
+        LDX     XPATHBUF.W
+        LDY     #FISBUF.W
+        LDA     #$1100
+        DOSCALL
+        BCS     +
+        LDA     FISBUF.W
+        AND     #$0040
+        BEQ     +
+        ACC8
+        LDX     #$FFFF
+-       INX
+        LDA     XPATHBUF.W,X
+        BNE     -
+        LDA     #'\'
+        STA     XPATHBUF.W,X
+        STZ     XPATHBUF+1.W,X
+        ACC16
++
+
+        LDX     #XPATHBUF.W
+        JSR     CMDPREBUILDWC2PATH.W
+        PLX
+
+        ACC16
+        LDX     DIRTMP.W
+        LDY     #FISBUF.W
+        LDA     #$1100
+        DOSCALL
+        BCS     +
+        LDA     FISBUF.W
+        AND     #$0040
+        BEQ     +
+        ACC8
+        LDX     DIRTMP.W
+-       INX
+        LDA     $0000.W,X
+        BNE     -
+        LDA     #'\'
+        STA     $0000.W,X        
+        STZ     $0001.W,X
+        INX
+        STX     DIRTMP+2.W
++       
         ACC8
         LDX     DIRTMP.W
 -       INX
@@ -1434,67 +1844,136 @@ COMMAND_RENAME:                 ; TODO
         BEQ     +
         INX
         BRA     -
-+       JMP     COMMAND_RENAME_WILDCARDS
++       JMP     COMMAND_MOVE_WILDCARDS
 ++
         ACC16
-        JSR     COMMAND_RENAME_MKDESTFN.W
         LDX     DIRTMP.W
-        LDY     #NAMEBUF.W
-        LDA     #$1700
+        LDY     #FISBUF.W
+        LDA     #$1100
         DOSCALL
+        BCS     @ERR
+
+        JSR     COMMAND_RENAME_MKDESTFN.W
+        JSR     COMMAND_COPY_MERGENAMEBUF.W
+        LDX     DIRTMP.W
+        JSR     COMMAND_DO_MOVEFILE.W
         BCC     @OK
 @ERR    JSR     COMMAND_ERROR
-@OK     RTS
+@OK     JMP     COMMAND_MOVE_END
 
-COMMAND_RENAME_WILDCARDS:
+COMMAND_MOVE_WILDCARDS:
+        ACC16
+        INC     COPYTMP2.W
+        LDX     DIRTMP.W
+        JSR     CMDPREBUILDWCPATH.W
+
         LDX     DIRTMP.W
         LDY     #FISBUF.W
         LDA     #$1100
         BCS     @ERR
 
-        ;TODO
+---     ; only COPY normal, readonly or system files
+        LDA     FISBUF.W
+        AND     #$0EC0
+        BNE     @SKIP
+        JSR     CMDBUILDWCPATHFIS.W
+        PHX
+        JSR     COMMAND_RENAME_MKDESTFN.W
+        JSR     COMMAND_COPY_MERGENAMEBUF.W
+        PLX
+        JSR     COMMAND_DO_MOVEFILE.W
+        BCS     @ERR
+@SKIP   LDA     #$1200
+        LDX     DIRTMP.W
+        LDY     #FISBUF.W
+        DOSCALL
+        BCC     ---
 
         BRA     @OK
 @ERR    JSR     COMMAND_ERROR
-@OK     RTS
+@OK     
 
-COMMAND_MKDIR:
-        ACC8
-
-        LDA     CONBUF.W,X
-        BNE     +
-        JMP     COMMAND_ERROR_FEW
-+       ACC16
-        TXA
-        CLC
-        ADC     #CONBUF.W
-        TAX
-        LDY     #$0000
-        LDA     #$3600
+COMMAND_MOVE_END:
+        ACC16
+        ; total files copied
+        LDA     COPYTMP1.W
+        STA     WIDENUM1.W
+        STZ     WIDENUM2.W
+        JSR     UNPACKWIDEBCD.W
+        ; 10 digits
+        LDA     #$1900
+        LDX     #CMDWIDEBCDBUFFER
         DOSCALL
-        BCC     @OK
-@ERR    JSR     COMMAND_ERROR
-@OK     RTS
 
-COMMAND_RMDIR:
-        ACC8
-
-        LDA     CONBUF.W,X
-        BNE     +
-        JMP     COMMAND_ERROR_FEW
-+       ACC16
-        TXA
-        CLC
-        ADC     #CONBUF.W
-        TAX
-        LDA     #$3300
-        DOSCALL
-        BCC     @OK
-@ERR    CMP     #DOS_ERR_BAD_PARAMETER
-        BEQ     @NORM
-        JSR     COMMAND_ERROR
-@OK     RTS
-@NORM   LDA     #$1900
-        LDX     #CMDRMDIRFAIL
+        LDA     #$1900
+        LDX     #COMMANDMOVEOKMSG.W
         DOSCALL
         RTS
+
+COMMAND_VOL_P8:
+        PHA
+        LSR     A
+        LSR     A
+        LSR     A
+        LSR     A
+        AND     #$0F
+        TAX
+        LDA     CMDHEXDIGITS.W,X
+        AND     #$FF
+        ORA     #$0200
+        DOSCALL
+        PLA
+        AND     #$0F
+        TAX
+        LDA     CMDHEXDIGITS.W,X
+        AND     #$FF
+        ORA     #$0200
+        DOSCALL
+        RTS
+
+COMMAND_VOL_PRINTSN:
+        LDA     FSMBBUF+$0A.W
+        JSR     COMMAND_VOL_P8
+        LDA     #$022F
+        DOSCALL
+        LDA     FSMBBUF+$0B.W
+        JSR     COMMAND_VOL_P8
+        RTS
+
+COMMAND_VOL:
+        LDA     #$3E00
+        DOSCALL
+        ACC8
+        ORA     #$40
+        STA     COMMANDDIRHEADER1_FMT.W
+        ACC16
+        AND     #$1F
+        JSR     CMDLOADFSMB.W
+
+        LDA     #$1900
+        LDX     #COMMANDDIRHEADER1
+        DOSCALL
+
+        ; volume label
+        LDX     #14
+-       LDA     FSMBBUF+$20.W,X
+        STA     NAMEBUF.W,X
+        DEX
+        DEX
+        BPL     -
+        STZ     NAMEBUF+$10.W
+
+        LDA     #$1900
+        LDX     #NAMEBUF.W
+        DOSCALL
+
+        LDA     #$1900
+        LDX     #COMMANDVOLSN
+        DOSCALL
+
+        JSR     COMMAND_VOL_PRINTSN
+
+        LDA     #$020D
+        DOSCALL
+        RTS
+

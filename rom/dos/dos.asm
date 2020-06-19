@@ -70,9 +70,9 @@ BANKS 1
 .DEFINE DOSLD           (DOSBANKD|DOSPAGE)
 .DEFINE DOSLC           DOSBANKC
 .DEFINE DOSTMP1         $00     ; used in file resolving, ctable load, math,
-                                ;       file handle code
+                                ;       file handle code, mem allocation (cnt)
 .DEFINE DOSTMP2         $02     ; used for path resolving,
-                                ;       file handle code
+                                ;       file handle code, mem allocation
 .DEFINE DOSTMP3         $04     ; used for file & path resolving,
                                 ;       file handle code
 .DEFINE DOSTMP4         $06     ; used for path resolving, file handle code
@@ -143,9 +143,12 @@ BANKS 1
 .DEFINE DOSKEYBBUF      $4200
 .DEFINE DOSKEYBBUFL     $4210
 .DEFINE DOSKEYBBUFR     $4212
+.DEFINE DOSMOVEFNBUF    $4220
 .DEFINE DOSFREEBANKS    $4280
 
 ; DOS high memory area $80:8000 - $80:BFFF
+.DEFINE DOSINBUF        $8700
+.DEFINE DOSINBUFSTAR    $8700
 .DEFINE DOSPATHSTR      $8800
 .DEFINE DOSFILETABLE    $8A00
 .DEFINE DOSPATHSTRSIZE  DOSFILETABLE-DOSPATHSTR

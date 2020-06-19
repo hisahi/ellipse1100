@@ -43,7 +43,7 @@ DOSCALLENTRY:
         PHX
         XBA
         AND     #$FF
-        CMP     #$40
+        CMP     #$41
         BCS     DOSUNKFUNCPLXPLA
         ASL     A
         TAX
@@ -77,7 +77,7 @@ DOSUNKFUNCPLXPLA:
 DOSUNKFUNC:
         LDA     #DOS_ERR_UNK_FUNCTION
         SEC
-        RTL
+        RTS
 
 DOSISBUSY:
         PLP
@@ -146,7 +146,8 @@ DOSCALLTABLE:
         .DW     DOSGETEXITCODE.W        ; $39 = get exit code
         .DW     DOSALLOCMEM.W           ; $3A = allocate memory
         .DW     DOSFREEMEM.W            ; $3B = free memory allocation
-        .DW     DOSUNKFUNC.W            ; $3C = read drive FSMB
-        .DW     DOSUNKFUNC.W            ; $3D = write drive FSMB
+        .DW     DOSREADFSMB.W           ; $3C = read drive FSMB
+        .DW     DOSUNKFUNC.W            ; $3D =
         .DW     DOSGETDRIVE.W           ; $3E = get active drive
         .DW     DOSGETVER.W             ; $3F = get Ellipse DOS version
+        .DW     DOSGETINBUF.W           ; $40 = get address to INBUF

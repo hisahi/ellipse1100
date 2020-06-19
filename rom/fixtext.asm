@@ -310,22 +310,64 @@ TEXT_UPDATE_ENTIRE_SCREEN:
         PLP
         RTS
 
-.MACRO TEXT_SCROLL_DMA ARGS BANKS, SRCADDR, DSTADDR, COUNT, FLAGS
+.MACRO TEXT_SCROLL_DMA_NOWAIT ARGS BANKS, SRCADDR, DSTADDR, COUNT, FLAGS
         ; use DMA 0 to move VRAM_CH and VRAM_CL up a row
         ACC16
-        LDA     #SRCADDR.w
-        STA     DMA0SRC.w
-        LDA     #DSTADDR.w
-        STA     DMA0DST.w
-        LDA     #BANKS.w        ; bank setup
-        STA     DMA0BNKS.w
-        LDA     #COUNT.w
-        STA     DMA0CNT.w
+        LDA     #SRCADDR.W
+        STA     DMA0SRC.W
+        LDA     #DSTADDR.W
+        STA     DMA0DST.W
+        LDA     #BANKS.W        ; bank setup
+        STA     DMA0BNKS.W
+        LDA     #COUNT.W
+        STA     DMA0CNT.W
         ACC8
-        LDA     #$90|FLAGS.b    ; enable DMA
-        STA     DMA0CTRL.w
--       BIT     DMA0STAT.w
+        LDA     #$90|FLAGS.B    ; enable DMA
+        STA     DMA0CTRL.W
+.ENDM
+
+.MACRO TEXT_SCROLL_DMAX_NOWAIT ARGS BANKS, SRCADDR, DSTADDR, COUNT, FLAGS
+        ; use DMA 0 to move VRAM_CH and VRAM_CL up a row
+        ACC16
+        LDA     #SRCADDR.W
+        STA     DMA0SRC.W,X
+        LDA     #DSTADDR.W
+        STA     DMA1DST.W,X
+        LDA     #BANKS.W        ; bank setup
+        STA     DMA1BNKS.W,X
+        LDA     #COUNT.W
+        STA     DMA1CNT.W,X
+        ACC8
+        LDA     #$90|FLAGS.B    ; enable DMA
+        STA     DMA1CTRL.W,X
+.ENDM
+
+.MACRO TEXT_DMA0_WAIT
+        ACC8
+-       BIT     DMA0STAT.W
         BMI     -
+.ENDM
+
+.MACRO TEXT_DMA1_WAIT
+        ACC8
+-       BIT     DMA1STAT.W
+        BMI     -
+.ENDM
+
+.MACRO TEXT_DMAX_WAIT
+        ACC8
+-       BIT     DMA0STAT.W,X
+        BMI     -
+.ENDM
+
+.MACRO TEXT_SCROLL_DMA ARGS BANKS, SRCADDR, DSTADDR, COUNT, FLAGS
+        TEXT_SCROLL_DMA_NOWAIT BANKS, SRCADDR, DSTADDR, COUNT, FLAGS
+        TEXT_DMA0_WAIT
+.ENDM
+
+.MACRO TEXT_SCROLL_DMAX ARGS BANKS, SRCADDR, DSTADDR, COUNT, FLAGS
+        TEXT_SCROLL_DMAX_NOWAIT BANKS, SRCADDR, DSTADDR, COUNT, FLAGS
+        TEXT_DMAX_WAIT
 .ENDM
 
 ; on correct bank
@@ -339,25 +381,37 @@ TEXT_SCROLL_UP_LINE:
         PLB
         SEI                     ; disable interrupts
 
-        ; use DMA 0 to move VRAM_CH and VRAM_CL up a row
-        TEXT_SCROLL_DMA         $8080, TEXT_VRAM_CH+80, TEXT_VRAM_CH, $1DB0, 0
+        ; use DMA 0 or 1 to move VRAM_CH and VRAM_CL up a row
+        LDX     #0
+        LDA     TEXT_USEDMA1.W
+        BEQ     +
+        LDX     #4
+        TEXT_DMA1_WAIT
++       TEXT_SCROLL_DMAX_NOWAIT $8080, TEXT_VRAM_CH+80, TEXT_VRAM_CH, $1DB0, 0
 
-        ; make blank row in VRAM_CH and VRAM_CL
-        LDX     #80
-@XLOOP:
-        DEX
-        STZ     TEXT_VRAM_CL+47*80.W,X
-        STZ     TEXT_VRAM_CH+47*80.W,X
-        BNE     @XLOOP
-
+        CPX     #0
+        BNE     +
+        TEXT_DMA0_WAIT
++
         ; do VRAM scrolling DMA
-        ; TODO: optimize if TEXT_USEDMA1 is nonzero
         TEXT_SCROLL_DMA         $4040, $1000, $0000, $F000, 0
         TEXT_SCROLL_DMA         $4140, $0000, $F000, $1000, 0
         TEXT_SCROLL_DMA         $4141, $1000, $0000, $F000, 0
         TEXT_SCROLL_DMA         $4241, $0000, $F000, $1000, 0
         TEXT_SCROLL_DMA         $4242, $1000, $0000, $F000, 0
-        TEXT_SCROLL_DMA         $8042, $FFFF&TEXT_BGCOLOR, $F000, $1000, 4
+        TEXT_SCROLL_DMA_NOWAIT  $8042, $FFFF&TEXT_BGCOLOR, $F000, $1000, 4
+
+        ACC16
+        ; make blank row in VRAM_CH and VRAM_CL
+        LDX     #80
+@XLOOP:
+        DEX
+        DEX
+        STZ     TEXT_VRAM_CL+47*80.W,X
+        BNE     @XLOOP
+
+        TEXT_DMA0_WAIT
+        ACC16
 
         PLB
         PLP

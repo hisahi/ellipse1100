@@ -200,3 +200,17 @@ DOSIRQHANDLER:
 DOSGETVER:              ; $3F = get Ellipse DOS version
         LDA     #$0100
         RTS
+
+DOSGETINBUF:            ; $40 = get INBUF address & bank
+        ENTERDOSRAM
+        ACC8
+        PHB
+        PLA
+        ACC16
+        AND     #$FF
+        TAX
+        LDA     #DOSINBUF.W
+        EXITDOSRAM
+        CLC
+        RTS
+

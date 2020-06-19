@@ -82,6 +82,7 @@ typedef struct floppy_drive {
     unsigned int sector_offset;
     unsigned int disk_offset;
     int seek_time;
+    int seek_ongoing;
     floppy_drive_status status;
     floppy_size media;
     unsigned char side;

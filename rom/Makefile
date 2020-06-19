@@ -46,7 +46,7 @@ dos/reboot.obj: dos/progs/reboot.asm
 	$(AS) $(AFLAGS) -o $@ $<
 REBOOT.COM: dos/reboot.obj
 	$(LD) $(LDFLAGS) -b reboot.lnk $@
-dos/console.obj: dos/console.asm dos/consolec.asm
+dos/console.obj: dos/console.asm dos/consolec.asm dos/consolef.asm
 	$(AS) $(AFLAGS) -o $@ $<
 CONSOLE.COM: dos/console.obj
 	$(LD) $(LDFLAGS) -b console.lnk $@

@@ -304,7 +304,9 @@ int write_elfs_fsmb(FILE* floppy)
     buf[0] = media_id & 0xFF;
     buf[1] = (media_id >> 8) & 0xFF;
     fwrite(buf, 1, 2, floppy);              /* media ID */
-    fseek(floppy, 6, SEEK_CUR);             /* padding */
+    for (i = 0; i < 2; ++i) buf[i] = rand() & 255;
+    fwrite(buf, 1, 2, floppy);              /* serial */
+    fseek(floppy, 4, SEEK_CUR);             /* padding */
     fwrite("\012\0", 1, 2, floppy);         /* log2(bytes per chunk) = 10 */
     buf[0] = (chunkcount - 1) & 0xFF;
     buf[1] = ((chunkcount >> 8) - 1) & 0xFF;
@@ -728,7 +730,8 @@ int prepare_elfs(const char* ffn, const char* fsfn)
     FILE* floppy;
     if (!(floppy = fopen(ffn, "rb+")))
         return fail_perror("cannot open floppy");
-    
+
+    srand(time(NULL));
     if (ret = read_fs_file(fsfn))
     {
         fclose(floppy);

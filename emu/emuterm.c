@@ -195,7 +195,7 @@ void emu_term_do_line(const char* buf, size_t buflen)
             if (floppy_has_media(1) && !f2wp) save_floppy_media(1);
             floppy_unmount(1);
             memset(drive1fn, 0, MAX_PATH_NAME + 1);
-            printf("Unmounted drive I\n");
+            printf("Unmounted drive II\n");
         }
     }
     else if (!strcmp(tok0, "b")) // breakpoint
