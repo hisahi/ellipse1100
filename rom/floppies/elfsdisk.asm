@@ -32,7 +32,7 @@
 .BASE $80
 
 .ORGA $01E0                             ; Ellipse standard partitions
-        ELLIPSEPART             PART_ELFS,   $00,  0,   1, 207, FDSECTORS-1
+        ELLIPSEPART             PART_ELFS,   $00,  0,   1, 159, FDSECTORS-1
         ELLIPSEPARTBLANK
         ELLIPSEPARTBLANK
         ELLIPSEPARTBLANK

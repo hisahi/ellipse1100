@@ -36,7 +36,9 @@
         CLD
         STZ     VPUCNTRL.W
         AXY16
+.IF _DEBUG == 0
         JSR     CHECKSUM
+.ENDIF
 
 ALMOSTRESET:
         XY16

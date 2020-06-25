@@ -70,7 +70,7 @@ DOSALLOCRAMBANK_MEM:
         BRA     DOSALLOCRAMBANK_EXEC@STA
 DOSALLOCRAMBANK_EXEC:
         ACC8
-        LDA     DOSPROGBANK.B
+        LDA     #$8F
 @STA    STA     DOSTMP1.B
 ; assumes DB=DOSBANKD
 ; C=1 if no more RAM banks available

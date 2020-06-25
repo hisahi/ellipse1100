@@ -114,8 +114,9 @@ DOSREADCONLINE:
         PHA
         TYA
         CMP     DOSLD|DOSTMP1.L
+        BEQ     +
         BCS     @BUFEND
-        PLA
++       PLA
         STA     $0000.W,X
         JSL     TEXT_WRCHR.L
         CMP     #$0D

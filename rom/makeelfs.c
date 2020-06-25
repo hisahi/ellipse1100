@@ -297,6 +297,8 @@ int write_elfs_fsmb(FILE* floppy)
     sectorsperctable = (sectorcount + 511) / 512;
     sectorsperctable = (sectorsperctable + 1) & ~1; /* round up to even */
     chunkcount = sectorcount >> 1;
+    --chunkcount;                           /* boot block / FSMB uses 2 sec */
+    chunkcount -= sectorsperctable >> 1;
 
     fseek(floppy, 512, SEEK_SET);           /* sector 1 */
     fputs("ELFS", floppy);                  /* ELFS volume identifier */
@@ -309,7 +311,7 @@ int write_elfs_fsmb(FILE* floppy)
     fseek(floppy, 4, SEEK_CUR);             /* padding */
     fwrite("\012\0", 1, 2, floppy);         /* log2(bytes per chunk) = 10 */
     buf[0] = (chunkcount - 1) & 0xFF;
-    buf[1] = ((chunkcount >> 8) - 1) & 0xFF;
+    buf[1] = (chunkcount >> 8) & 0xFF;
     fwrite(buf, 1, 2, floppy);              /* maximum chunk */
     buf[0] = (sectorspertrack >> 1) & 0xFF;
     buf[1] = (sectorspertrack >> 9) & 0xFF;

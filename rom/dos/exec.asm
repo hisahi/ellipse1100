@@ -79,7 +79,7 @@ DOSLAUNCH:              ; $38 = launch program
         JSR     DOSPAGEINDIR.W
         JSR     DOSRESOLVEPATHFILE.W
         BCS     @ERR
-        JSR     DOSALLOCRAMBANK.W
+        JSR     DOSALLOCRAMBANK_EXEC.W
         BCS     @ERR
         STA     DOSTMP7.B
         ACC16

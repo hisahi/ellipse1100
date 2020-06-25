@@ -198,6 +198,30 @@ void emu_term_do_line(const char* buf, size_t buflen)
             printf("Unmounted drive II\n");
         }
     }
+    else if (!strcmp(tok0, "df1")) // floppy 1 dump
+    {
+        if (!floppy_has_media(0))
+            printf("No media in drive I\n");
+        else if (f1wp)
+            printf("Drive I is write-protected\n");
+        else
+        {
+            save_floppy_media(0);
+            printf("Drive I dumped\n");
+        }
+    }
+    else if (!strcmp(tok0, "df2")) // floppy 2 dump
+    {
+        if (!floppy_has_media(1))
+            printf("No media in drive II\n");
+        else if (f2wp)
+            printf("Drive II is write-protected\n");
+        else
+        {
+            save_floppy_media(1);
+            printf("Drive II dumped\n");
+        }
+    }
     else if (!strcmp(tok0, "b")) // breakpoint
     {
         unsigned int tmpb, tmp;
@@ -289,6 +313,8 @@ void emu_term_do_line(const char* buf, size_t buflen)
         printf("f       mount floppy I or unmount\n");
         printf("f1      mount floppy I or unmount\n");
         printf("f2      mount floppy II or unmount\n");
+        printf("df1     update current floppy I file\n");
+        printf("df2     update current floppy II file\n");
         printf("x1      set window size to x1 resolution\n");
         printf("x2      set window size to x2 resolution\n");
         printf("cc      cycle counter\n");

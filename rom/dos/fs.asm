@@ -435,21 +435,6 @@ DOSSTORECHUNK:
 +       PLX
         RTS
 
-.MACRO DOSMEMENTER
-        PHB
-        PHD
-        PHA
-        SETBANK16       $80
-        LDA     #DOSPAGE
-        TCD
-        PLA
-.ENDM
-
-.MACRO DOSMEMEXIT
-        PLD
-        PLB
-.ENDM
-
 ; assumes B=$80 D=DOSPAGE
 ; load actual current drive/disk
 ; destroys A
@@ -657,17 +642,16 @@ DOSPAGEINACTIVEDRIVE:
 
         PLA
         STA     DOSACTIVEDRIVE.B
+        STZ     DOSCACHEDDRIVE.B
 
-@POST
-        JSR     DOSLOADFSMB.W
+@POST   JSR     DOSLOADFSMB.W
         BCS     @FAIL2
         JSR     DOSVERIFYVOLUME.W
         BCS     @FAIL2
         JSR     DOSLOADCTABLE.W
         BCS     @FAIL2
 
-@ALLOK
-        ; get current directory of new drive
+@OK     ; get current directory of new drive
         LDA     DOSACTIVEDRIVE.B
         DEC     A
         ASL     A
@@ -680,9 +664,6 @@ DOSPAGEINACTIVEDRIVE:
 
 @FAIL   STA     1,S
         PLA
-        SEC
-        RTS
-
 @FAIL2  SEC
         RTS
 
@@ -3239,6 +3220,26 @@ DOSPAGEINFILENEXTCHUNK:
         SEC
         RTS
 
+DOSFILECANREAD:
+        LDA     $0024.W,X
+        AND     #1
+        BEQ     +
+        CLC
+        RTS
++       LDA     #DOS_ERR_READ_ERROR
+        SEC
+        RTS
+
+DOSFILECANWRITE:
+        LDA     $0024.W,X
+        AND     #2
+        BEQ     +
+        CLC
+        RTS
++       LDA     #DOS_ERR_WRITE_ERROR
+        SEC
+        RTS
+
 ; used for Ah=$21
 ; assumes B=$80 D=DOSPAGE
 ; reads 0 <= DOSTMPX5 < $0400 from handle at DOSTMPX3 into memory at DOSTMPX2
@@ -3520,4 +3521,50 @@ DOSFILEDOTRUNC:
         RTS
 @ERRX   PLX
 @ERR    SEC
+        RTS
+
+DOSGETACTIVEDRIVEINFO:
+        STX     DOSTMP1.B
+        LDA     3,S
+        AND     #$FF
+        STA     DOSTMP2.B
+        
+        LDY     #$00
+        LDA     #80
+        STA     (DOSTMP1.B),Y
+
+        LDY     #$04
+        LDA     FSMBCACHE+$12.W
+        INC     A
+        STA     (DOSTMP1.B),Y
+
+        LDY     #$06
+        LDA     FSMBCACHE+$10.W
+        STA     (DOSTMP1.B),Y
+
+        LDY     #$08
+        LDA     #$0200
+        STA     (DOSTMP1.B),Y
+
+        LDY     #$0A
+        LDA     #$0200
+        STA     (DOSTMP1.B),Y
+
+        LDY     #$0E
+        LDA     FSMBCACHE+$0A.W
+        STA     (DOSTMP1.B),Y
+        
+        LDY     #$0C
+        LDA     FSMBCACHE+$08.W
+        STA     (DOSTMP1.B),Y
+        LDY     #$02
+        CMP     #0
+        BEQ     +
+        CMP     #4
+        BCS     +
+        ASL     A
+        ASL     A
+        ADC     #8
+        STA     (DOSTMP1.B),Y
++
         RTS

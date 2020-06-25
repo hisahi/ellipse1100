@@ -120,6 +120,7 @@ CMDLOOP:
         JSR     CMDUPPERCASE.W
         JSR     CMDSWITCHDRIVE.W
         ACC16
+        STZ     FSMBDRV.W
         JMP     CMDLOOP
 
 @CMDBS

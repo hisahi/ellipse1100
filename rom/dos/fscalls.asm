@@ -32,6 +32,10 @@ DOSPAGEINDIRAPI:
         PHA
         PHX
         PHY
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
         JSR     DOSPAGEINACTIVEDRIVE.W
         LDA     DOSACTIVEDIR.B
         JSR     DOSPAGEINACTIVEDIR.W
@@ -42,7 +46,7 @@ DOSPAGEINDIRAPI:
 
 ; $0E = set active drive
 DOSSETDRIVE:
-        DOSMEMENTER
+        ENTERDOSRAM
         PHX
         PHY
         PHA
@@ -54,27 +58,32 @@ DOSSETDRIVE:
         BCS     @BAD
         CMP     DOSREALDRIVE.B
         BEQ     +
+        STZ     DOSCACHEDDRIVE.B
         STA     DOSACTIVEDRIVE.B
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
         JSR     DOSPAGEINACTIVEDRIVE.W
         BCS     @FAIL
         JSR     DOSPAGEOUTDRIVE.W
 +       PLY
         PLX
-        DOSMEMEXIT
+        EXITDOSRAM
         CLC
         RTS
 @BAD    LDA     #DOS_ERR_INVALID_DRIVE
 @FAIL   PLY
         PLX
-        DOSMEMEXIT
+        EXITDOSRAM
         SEC
         JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $3E = get active drive
 DOSGETDRIVE:
-        DOSMEMENTER
+        ENTERDOSRAM
         LDA     DOSREALDRIVE.B
-        DOSMEMEXIT
+        EXITDOSRAM
         CLC
         RTS
 
@@ -118,7 +127,7 @@ DOSFINDFIRST:
         JSR     DOSCOPYBXSTRBUFUC.W
         ENTERDOSRAM
         ACC8
-        LDA     #$80
+        LDA     #(DOSBANKD>>16)
         STA     DOSIOBANK.B
         ACC16
         JSR     DOSPAGEINDIRAPI.W
@@ -183,7 +192,7 @@ DOSFINDNEXT:
         JSR     DOSUNPACKFIS.W
         ENTERDOSRAM
         ACC8
-        LDA     #$80
+        LDA     #(DOSBANKD>>16)
         STA     DOSIOBANK.B
         ACC16
         PHX
@@ -257,7 +266,7 @@ DOSOPENFILE:
         STA     DOSLD|DOSTMPX2.L
         ENTERDOSRAM
         ACC8
-        LDA     #$80
+        LDA     #(DOSBANKD>>16)
         STA     DOSIOBANK.B
         ACC16
         JSR     DOSPAGEINDIRAPI.W
@@ -365,6 +374,10 @@ DOSCLOSEFILE:
         LDA     8,S                     ; orig A
         AND     #$FF
         BNE     @IGNOREERRORS
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
         JSR     DOSCLOSEHANDLE.W
         BCS     @ERR
         JSR     DOSWRITEBACK.W
@@ -442,6 +455,10 @@ DOSCREATEFILE:
         BRA     +++
 +       PLA
         ENTERDOSRAM
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
         JSR     DOSFILEDOTRUNC.w
 ++      EXITDOSRAM
 +++     PLX
@@ -494,7 +511,7 @@ DOSDELETEFILE:
         JSR     DOSCOPYBXSTRBUFUC.W
         ENTERDOSRAM
         ACC8
-        LDA     #$80
+        LDA     #(DOSBANKD>>16)
         STA     DOSIOBANK.B
         ACC16
         JSR     DOSPAGEINDIRAPI.W
@@ -527,7 +544,7 @@ DOSRENAMEFILE:
         JSR     DOSCOPYBXSTRBUFUC.W
         ENTERDOSRAM
         ACC8
-        LDA     #$80
+        LDA     #(DOSBANKD>>16)
         STA     DOSIOBANK.B
         ACC16
         JSR     DOSPAGEINDIRAPI.W
@@ -565,7 +582,7 @@ DOSMOVEENT:
         JSR     DOSCOPYBXSTRBUFUC.W
         ENTERDOSRAM
         ACC8
-        LDA     #$80
+        LDA     #(DOSBANKD>>16)
         STA     DOSIOBANK.B
         ACC16
         JSR     DOSPAGEINDIRAPI.W
@@ -627,6 +644,10 @@ DOSMKDIR:
         LDA     3,S
         TAY
         ENTERDOSRAM
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
         PHY
         JSR     DOSPAGEINDIRAPI.W
         LDX     #0
@@ -673,7 +694,7 @@ DOSRMDIR:
         JSR     DOSCOPYBXSTRBUFUC.W
         ENTERDOSRAM
         ACC8
-        LDA     #$80
+        LDA     #(DOSBANKD>>16)
         STA     DOSIOBANK.B
         ACC16
         JSR     DOSPAGEINDIRAPI.W
@@ -699,17 +720,90 @@ DOSRMDIR:
         SEC
         JMP     DOSMAYBEENDDIRWRITE.W
 
-; $32 = update file entry
-DOSUPDDIRENT:
-
 ; $18 = get drive info
 DOSGETDRIVEINFO:
+        PHX
+        PHY
+        ENTERDOSRAM
+        AND     #$FF
+        STA     DOSACTIVEDRIVE.B
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        JSR     DOSGETACTIVEDRIVEINFO.W
+        EXITDOSRAM
+        PLY
+        PLX
+        RTS
 
 ; $1E = set file attributes
 DOSSETATTRS:
+        STA     DOSTMPX1.B
+        PHX
+        PHY
+        JSR     DOSCOPYBXSTRBUFUC.W
+        ENTERDOSRAM
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
+        JSR     DOSPAGEINDIRAPI.W
+        LDX     #0
+        JSR     DOSEXTRACTRESOLVEPATH.W
+        BCS     @ERRM
+        PHX
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        PLX
+        BCS     @ERRM
+        JSR     DOSRESOLVEFILE.W
+        BCS     @ERRM
+        LDX     DOSNEXTFILEOFF.B
+        LDA     DOSTMPX1.B
+        ACC8
+        STA     DIRCHUNKCACHE+$01.W,X
+        ACC16
+        EXITDOSRAM
+        PLY
+        PLX
+        CLC
+        JMP     DOSMAYBEENDDIRWRITE.W
+@ERRM   EXITDOSRAM
+@ERR    PLY
+        PLX
+        SEC
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $1F = get file attributes
 DOSGETATTRS:
+        PHX
+        PHY
+        JSR     DOSCOPYBXSTRBUFUC.W
+        ENTERDOSRAM
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
+        JSR     DOSPAGEINDIRAPI.W
+        LDX     #0
+        JSR     DOSEXTRACTRESOLVEPATH.W
+        BCS     @ERRM
+        PHX
+        JSR     DOSPAGEINACTIVEDRIVE.W
+        PLX
+        BCS     @ERRM
+        JSR     DOSRESOLVEFILE.W
+        BCS     @ERRM
+        LDX     DOSNEXTFILEOFF.B
+        LDA     DIRCHUNKCACHE+$01.W,X
+        AND     #$FF
+        EXITDOSRAM
+        PLY
+        PLX
+        CLC
+        JMP     DOSMAYBEENDDIRWRITE.W
+@ERRM   EXITDOSRAM
+@ERR    PLY
+        PLX
+        SEC
+        JMP     DOSMAYBEENDDIRWRITE.W
 
 ; $21 = read from file
 DOSFILEREAD:
@@ -732,8 +826,14 @@ DOSFILEREAD:
         TDC
         STA     DOSLD|DOSTMPX2.L
         ENTERDOSRAM
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
         STX     DOSTMPX3.B
         STZ     DOSTMPX1.B
+        JSR     DOSFILECANREAD.W
+        BCS     @ERRC
 -       LDX     DOSTMPX3.B
         PHY
         JSR     DOSFILEREMBYTES.W
@@ -770,7 +870,7 @@ DOSFILEREAD:
         JMP     DOSMAYBEENDDIRWRITE.W
 @ERRY   PLY
 @ERR    PLA
-        EXITDOSRAM
+@ERRC   EXITDOSRAM
         SEC
         PLX
         JMP     DOSMAYBEENDDIRWRITE.W
@@ -797,9 +897,14 @@ DOSFILEWRITE:
         TDC
         STA     DOSLD|DOSTMPX2.L
         ENTERDOSRAM
-        ; TODO: check if can write
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
         STX     DOSTMPX3.B
         STZ     DOSTMPX1.B
+        JSR     DOSFILECANWRITE.W
+        BCS     @ERRC
 -       LDX     DOSTMPX3.B
         PHY
         JSR     DOSFILEREMBYTESWRITE.W
@@ -831,7 +936,7 @@ DOSFILEWRITE:
 +++     PLX
         JMP     DOSMAYBEENDDIRWRITE.W
 @ERR    PLA
-        EXITDOSRAM
+@ERRC   EXITDOSRAM
         SEC
         PLX
         JMP     DOSMAYBEENDDIRWRITE.W
@@ -848,6 +953,12 @@ DOSFILEGETSIZE:
         BRA     +++
 +       PLA
         ENTERDOSRAM
+        PHA
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
+        PLA
         JSR     DOSFILEDOGETSIZE.w
 ++      EXITDOSRAM
 +++     PLX
@@ -865,6 +976,12 @@ DOSFILESEEK:
         BRA     +++
 +       PLA
         ENTERDOSRAM
+        PHA
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
+        PLA
         JSR     DOSFILEDOSEEK.w
 ++      EXITDOSRAM
 +++     PLX
@@ -882,6 +999,12 @@ DOSFILETRUNC:
         BRA     +++
 +       PLA
         ENTERDOSRAM
+        PHA
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
+        PLA
         JSR     DOSFILEDOTRUNC.w
 ++      EXITDOSRAM
 +++     PLX
@@ -896,7 +1019,7 @@ DOSSETDIR:
         ACC8
         LDA     DOSREALDRIVE.B
         STA     DOSTMPX1.B
-        LDA     #$80
+        LDA     #(DOSBANKD>>16)
         STA     DOSIOBANK.B
         LDA     #$FF
         STA     DOSUPDATEPATH.B
@@ -945,6 +1068,12 @@ DOSGETDIR:
         PHY
         TXY
         ENTERDOSRAM
+        PHA
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
+        PLA
         JSR     DOSCURPATHTOX.W
         EXITDOSRAM
         DEY
@@ -984,6 +1113,12 @@ DOSGETFREESPACE:
 ; $3C = read drive FSMB
 DOSREADFSMB:
         ENTERDOSRAM
+        PHA
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
+        PLA
         AND     #$FF
         BEQ     +
         STA     DOSACTIVEDRIVE.B

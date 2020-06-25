@@ -70,6 +70,15 @@ DOSSTART:
         STZ     DOSDATEHOUR.B   ;+  DOSDATEMINUTE.B
         STZ     DOSDATESECOND.B ;+    DOSDATETICK.B
         STZ     DOSOLDTEXTDMA1.B
+
+; copy internal call table to end of bank $81
+        LDX     #DOSICALLTABLE_END.W-DOSICALLTABLE.W
+-       DEX
+        DEX
+        LDA     DOSBANKC|DOSICALLTABLE.L,X
+        STA     DOSBANKC|($10000-DOSICALLTABLE_END+DOSICALLTABLE).L,X
+        CPX     #0
+        BNE     -
         
         LDA     #$0001
         STA     DOSFLASHCURSOR.W

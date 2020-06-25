@@ -244,3 +244,6 @@ BANKS 1
 .ACCU 16
 .INDEX 16
         .INCLUDE    "dos/time.asm"
+.ACCU 16
+.INDEX 16
+        .INCLUDE    "dos/icall.asm"

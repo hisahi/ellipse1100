@@ -52,7 +52,7 @@ BANKS 8
 
 .ORGA $000000           ; DATA
 NOTICE_START:
-        .DB     "(C) ELLIPSE DATA ELECTRONICS.   1984/1985 v0.1.0"
+        .DB     "(C) ELLIPSE DATA ELECTRONICS.   1984/1985 v1.0.0"
         .DB     0
 ROM_VERSION:
         .DW     $0100

@@ -84,11 +84,12 @@ void load_rom(void)
 
 void save_floppy_media(int drivenum)
 {
-    FILE* fp = fopen(drivenum == 1 ? drive1fn : drive0fn, "rb");
+    FILE* fp = fopen(drivenum == 1 ? drive1fn : drive0fn, "wb");
     if (fp)
     {
-        if (!floppy_save_disk(drivenum, fp))
+        if (floppy_save_disk(drivenum, fp))
             perror("failed to save floppy file");
+        fclose(fp);
     }
     else
         perror("failed to save floppy file");

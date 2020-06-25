@@ -112,8 +112,8 @@ DOSCALLTABLE:
         .DW     DOSRENAMEFILE.W         ; $17 = rename file
         .DW     DOSGETDRIVEINFO.W       ; $18 = get drive info
         .DW     DOSOUTPUTSTRING00.W     ; $19 = output string ending in '\0'
-        .DW     DOSUNKFUNC.W            ; $1A = set DTA
-        .DW     DOSUNKFUNC.W            ; $1B = get DTA
+        .DW     DOSUNKFUNC.W            ; $1A = 
+        .DW     DOSUNKFUNC.W            ; $1B = 
         .DW     DOSUNKFUNC.W            ; $1C = 
         .DW     DOSUNKFUNC.W            ; $1D = 
         .DW     DOSSETATTRS.W           ; $1E = set file attributes
@@ -136,7 +136,7 @@ DOSCALLTABLE:
         .DW     DOSUNKFUNC.W            ; $2F = 
         .DW     DOSSETDIR.W             ; $30 = set current directory
         .DW     DOSGETDIR.W             ; $31 = get current directory
-        .DW     DOSUPDDIRENT.W          ; $32 = update file entry
+        .DW     DOSUNKFUNC.W            ; $32 = 
         .DW     DOSRMDIR.W              ; $33 = delete (empty) directory
         .DW     DOSUNKFUNC.W            ; $34 = 
         .DW     DOSGETFREESPACE.W       ; $35 = get free space

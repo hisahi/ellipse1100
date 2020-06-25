@@ -58,6 +58,8 @@
 .MACRO ENTERTEXTRAM
         PHB
         PHD
+        ACC16
+        PHA
         ACC8
         LDA     #$80
         PHA
@@ -65,17 +67,20 @@
         ACC16
         LDA     #$1000
         TCD
+        PLA
 .ENDM
 
 .MACRO ENTERTEXTRAM8
         PHB
         PHD
         ACC16
+        PHA
         LDA     #$1000
         TCD
+        PLA
         ACC8
-        LDA     #$80
-        PHA
+        PEA     $8080
+        PLB
         PLB
 .ENDM
 
@@ -645,16 +650,17 @@ TEXT_UPDATE_CHAR_AT_CURSOR_RAW:
 ; A, X, Y preserved
 TEXT_MOVE_CURSOR_X:
         PHP
+        ENTERTEXTRAM
         AXY16
         PHA
         TXA
         BCS     +
-        CMP     TEXT_CURSORXL.L
+        CMP     TEXT_CURSORXL.W
         BCC     ++
 +       PHA
         JSR     TEXT_UPDATE_CHAR_AT_CURSOR_RAW
         PLA
-        STA     TEXT_CURSORXL.L
+        STA     TEXT_CURSORXL.W
         PHX
         PHY
         JSR     TEXT_CURSOR_UPDATE
@@ -665,6 +671,7 @@ TEXT_MOVE_CURSOR_X:
         SEC
         RTS
 ++      PLA
+        EXITTEXTRAM
         PLP
         CLC
         RTS
@@ -673,21 +680,23 @@ TEXT_MOVE_CURSOR_X:
 ; A, X, Y preserved
 TEXT_MOVE_CURSOR:
         PHP
+        ENTERTEXTRAM
         AXY16
         PHA
         JSR     TEXT_UPDATE_CHAR_AT_CURSOR_RAW
         TXA
         AND     #$FF
-        STA     TEXT_CURSORXL.L
+        STA     TEXT_CURSORXL.W
         TYA
         AND     #$FF
-        STA     TEXT_CURSORYL.L
+        STA     TEXT_CURSORYL.W
         PHX
         PHY
         JSR     TEXT_CURSOR_UPDATE
         PLY
         PLX
         PLA
+        EXITTEXTRAM
         PLP
         RTS
 

@@ -23,15 +23,12 @@ FLOPPY:
                     $00       partition type
                                     $00     no partition
                                     $01     raw data
-                                    $02     E*FS
-                                    $03     Ellipse DOS internal
+                                    $02     ELFS
+                                    $03     reserved for Ellipse DOS internal
                     $01       partition flags
                                     --------
                     $02:$03   first track (also includes platter, side, etc.)
-                                    highest bit of $03 is side
-
                     $04:$05   last track (also includes platter, side, etc.)
-                                    highest bit of $05 is side
                     $06       first sector
                     $07       last sector
 
@@ -196,23 +193,26 @@ ELLIPSE DOS API
         Get drive info                      $18
             In      Al=drive number or $00 for current
                     B:X=address to disk info buffer
+                        $00     number of tracks
+                        $02     number of sectors
+                        $04     number of chunks
+                        $06     log2(n) for n is bytes per chunks
+                        $08     size of disk sector in bytes
+                        $0A     sectors per chunk
+                        $0C     media ID
+                        $0E     volume identification number
             Out     success C=0     
                     failure C=1     A=error
         Output string terminating in $00    $19
             In:     B:X=address to string
-            Out:    X=nest address to read (new X - old X = chars written)
-        Set DTA                             $1A
-            In      B:X=address to new DTA
-        Get DTA                             $1B
-            Out     X=offset
-                    Y=bank
+            Out:    X=next address to read (new X - old X = chars written)
         Set file attributes                 $1E
             In      B:X=address to pathname 
-            Out     success C=0     Y=attributes
+            Out     success C=0     A=attributes
                     failure C=1     A=error
         Get file attributes                 $1F
             In      B:X=address to pathname 
-                    Y=attributes
+                    Al=attributes
             Out     success C=0
                     failure C=1     A=error
         Read bytes from file                $21
@@ -278,10 +278,6 @@ ELLIPSE DOS API
                         root directory is empty string (no leading backslash
                                                         or drive designator)
                         trailing backslash not included
-        Update file entry                   $32
-            In      X=file handle
-            Out     success C=0
-                    failure C=1     A=error
         Delete directory                    $33
             In      B:X=address to dirname
             Out     success C=0

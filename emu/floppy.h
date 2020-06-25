@@ -26,8 +26,8 @@ SOFTWARE.
 #ifndef _E1100_FLOPPY_H
 #define _E1100_FLOPPY_H
 
-#include "mem.h"
 #include <stdio.h>
+#include "mem.h"
 
 #define _FLOPPY_SIDES 2
 #define _FLOPPY_TRACKS 80

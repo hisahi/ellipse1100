@@ -46,6 +46,10 @@ dos/reboot.obj: dos/progs/reboot.asm
 	$(AS) $(AFLAGS) -o $@ $<
 REBOOT.COM: dos/reboot.obj
 	$(LD) $(LDFLAGS) -b reboot.lnk $@
+dos/format.obj: dos/progs/format.asm
+	$(AS) $(AFLAGS) -o $@ $<
+FORMAT.COM: dos/format.obj
+	$(LD) $(LDFLAGS) -b format.lnk $@
 dos/console.obj: dos/console.asm dos/consolec.asm dos/consolef.asm
 	$(AS) $(AFLAGS) -o $@ $<
 CONSOLE.COM: dos/console.obj
@@ -56,8 +60,8 @@ floppies/elfsdisk.obj: floppies/elfsdisk.asm
 
 elfsdisk.img: makeelfs floppies/elfsdisk.obj floppies/elfsdisk.fs
 	$(LD) $(LDFLAGS) elfsdisk.lnk $@ && ./makeelfs elfsdisk.img floppies/elfsdisk.fs
-edos.img: makeelfs DOS.SYS CONSOLE.COM \
-			HELLO.COM TOUCH.COM REBOOT.COM \
+edos.img: makeelfs DOS.SYS CONSOLE.COM HELLO.COM TOUCH.COM REBOOT.COM \
+			FORMAT.COM \
 			dos/dossys.obj floppies/edos.obj floppies/dos.fs
 	$(LD) $(LDFLAGS) edos.lnk $@ && ./makeelfs edos.img floppies/dos.fs
 
