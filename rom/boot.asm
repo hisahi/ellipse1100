@@ -626,7 +626,6 @@ MESSAGE_MENU:
         .DB     "    ","ELLIPSE 1100 MENU",13,13
         .DB     "    ","  -ESC-",9,9,"BOOT FROM FLOPPY",13
         .DB     13
-        .DB     "    ","  -B-",9,9,"BASIC",13
         .DB     "    ","  -M-",9,9,"MONITOR",13
 .IF _DEBUG != 0
         .DB     13

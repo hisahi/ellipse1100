@@ -452,7 +452,6 @@ COMMAND_DIR_SUPPLIED:
         BNE     +
         LDA     CONBUF.W,X
         INX
-        INX
         JSR     CMDUPPERCASE.W
         CMP     #'A'
         BCC     COMMAND_DIR_INVALID
@@ -485,14 +484,14 @@ COMMAND_DIR_SUPPLIED:
 -       INX
         INY
         LDA     CONBUF.W,X
+        BEQ     ++
         JSR     CMDUPPERCASE.W
         STA     NAMEBUF.W,Y
-        BEQ     +
         CPY     #15
         BCC     -
 +       INY
         LDA     #0
-        STA     NAMEBUF.W,Y
+++      STA     NAMEBUF.W,Y
         PLX
         ; copy from before until X to end of PATHBUF
         LDY     #_sizeof_PATHBUF
@@ -598,14 +597,14 @@ COMMAND_DIR_HEADER:
         ; volume label
         LDX     #14
 -       LDA     FSMBBUF+$20.W,X
-        STA     NAMEBUF.W,X
+        STA     TMPBUF.W,X
         DEX
         DEX
         BPL     -
-        STZ     NAMEBUF+$10.W
+        STZ     TMPBUF+$10.W
 
         LDA     #$1900
-        LDX     #NAMEBUF.W
+        LDX     #TMPBUF.W
         DOSCALL
 
         LDA     #$1900

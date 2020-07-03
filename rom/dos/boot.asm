@@ -24,81 +24,60 @@
 ; Written for the WLA-DX assembler
 ;
 
-.DEFINE DOSBOOTTMP $803C00
-.DEFINE DOSBOOTTMP2 $803C02
+.DEFINE LOADSECT $00
+.DEFINE LOADTRK $02
+.DEFINE CHUNK $04
+.DEFINE CCT $06
+.DEFINE SPT $08
+.DEFINE BANK $0A
 
 BOOTLOAD:
         SEI
-        LDA     #0
-        STA     DOSBOOTTMP.L
-
         LDA     #MESSAGE_DOSBOOTING.w
         LDX     #0
         LDY     #0
         JSL     TEXT_WRSTRAT
 
-; read 64 KB DOS.SYS to bank $81
+; read DOS.SYS to bank $81
 @GOT_FLOPPY:
         ACC8
         LDA     #$00
         PHA
         PLB
 
+        ACC16
+        LDA     #$3C00
+        TCD
+        STA     CCT.B
+
+        ; load FSMB
+        LDA     #1
+        STZ     LOADTRK.B
+        STA     LOADSECT.B 
         LDA     #$0080
-        STA     DOSBOOTTMP2.L
+        STA     BANK.B
+        LDX     #$9800
+        JSR     LOADSECTOR.W
 
-        AXY8
-        LDY     #10
-        LDX     #0
-        BRA     @SECTORLOOP
-@TRACKLOOP:
-        LDY     #0
-@SECTORLOOP:
-        ACC16
-        LDA     #$0200
-        STA     DMA1CNT
-        LDA     #$7081          ; from $70 to make sure it uses I/O
-        STA     DMA1BNKS
-        LDA     #FLP1DATA.W
-        STA     DMA1SRC
-        LDA     DOSBOOTTMP.L
-        STA     DMA1DST
-        ACC8
+        LDA     $809800.L
+        CMP     #$4C45
+        BNE     BOOTERROR
+        LDA     $809802.L
+        CMP     #$5346
+        BNE     BOOTERROR
 
-        STY     FLP1SECT        ; sector, track, side
-        STX     FLP1TRCK        ; to 0
-        LDA     #$61
-        STA     FLP1STAT        ; start seek & read
-@SEEKLOOP:
-        BIT     FLP1STAT
-        BVS     @BOOTERROR
-        BPL     @SEEKLOOP
+        LDA     $80981A.L
+        BEQ     BOOTERROR
+        STA     CHUNK.B
+        
+        LDA     $809814.L
+        ASL     A
+        STA     SPT.B
 
-@SEEKDONE:
-        ; read with DMA
-        LDA     #$94
-        STA     DMA1CTRL
--       BIT     FLP1STAT
-        BVS     @BOOTERROR
-        BIT     DMA1STAT
-        BMI     -
-
-        ACC16
-        LDA     DOSBOOTTMP.L
-        CLC
-        ADC     #$0200
-        STA     DOSBOOTTMP.L
-        ACC8
-
-        LDA     DOSBOOTTMP2.L
-        DEC     A
-        STA     DOSBOOTTMP2.L
-        BEQ     @ALLREAD
-        INY
-        CPY     #16
-        BCC     @SECTORLOOP
-        INX
-        BRA     @TRACKLOOP
+        LDX     #$0000
+-       JSR     LOADCHUNK.W
+        JSR     NEXTCHUNK.W
+        BNE     -
         
 @ALLREAD:
         LDA     #$81
@@ -108,13 +87,13 @@ BOOTLOAD:
         AXY16
         LDA     $0000.W
         CMP     #$4F44
-        BNE     @BOOTERROR
+        BNE     BOOTERROR
         LDA     $0002.W
         CMP     #$2E53
-        BNE     @BOOTERROR
+        BNE     BOOTERROR
         JML     $810004.L
 
-@BOOTERROR:
+BOOTERROR:
         LDA     #$01
         STA     EINTGNRC.L
         SEI
@@ -132,9 +111,105 @@ BOOTLOAD:
 @SYSRESET:
         LDA     #$00
         STA     VPUCNTRL.L
-        LDA     #$FF
+        DEC     A
         STA     ESYSSTAT.L
         STP
+
+.ACCU 16
+PREADJUSTLOADSECTOR:
+        SEC
+        SBC     SPT.B
+        STA     LOADSECT.B
+        INC     LOADTRK.B
+ADJUSTLOADSECTOR:
+        LDA     LOADSECT.B
+        CMP     SPT.B
+        BCS     PREADJUSTLOADSECTOR
+LOADSECTOR:
+        STX     DMA1DST.W
+        LDA     #$0200
+        STA     DMA1CNT.W
+        LDA     #$7000          ; from $70 to make sure it uses I/O
+        ORA     BANK.B
+        STA     DMA1BNKS.W
+        LDA     #FLP1DATA.W
+        STA     DMA1SRC.W
+        
+        LDA     LOADSECT.B
+        STA     FLP1SECT.W      ; sector, track, side
+        LDA     LOADTRK.B
+        CMP     #80
+        BCC     +
+        CLC
+        ADC     #48
++       STA     FLP1TRCK.W      ; to 0
+
+        ACC8
+
+        LDA     #$61
+        STA     FLP1STAT.W      ; start seek & read
+@SEEKLOOP:
+        BIT     FLP1STAT.W
+        BVS     BOOTERROR
+        BPL     @SEEKLOOP
+
+        LDA     #$94
+        STA     DMA1CTRL.W      ; start read
+@READLOOP:
+        BIT     DMA1STAT.W
+        BMI     @READLOOP
+
+        ACC16
+        RTS
+
+LOADCHUNK:
+        LDA     #$0081
+        STA     BANK.B
+        LDA     CHUNK.B
+        DEC     A
+        ASL     A
+        CLC
+        ADC     $809838.L
+        STA     LOADSECT.B
+        STZ     LOADTRK.B
+        JSR     ADJUSTLOADSECTOR.W
+        INC     LOADSECT.B
+        TXA
+        CLC
+        ADC     #$0200
+        TAX
+        JSR     LOADSECTOR.W
+        TXA
+        CLC
+        ADC     #$0200
+        TAX
+        RTS
+
+NEXTCHUNK:
+        LDA     CHUNK.B
+        XBA
+        AND     #$FF
+        PHX
+        CMP     CCT.B
+        BEQ     +
+        STA     CCT.B
+        LDX     #$A000
+        INC     A
+        INC     A
+        STA     LOADSECT.B
+        STZ     LOADTRK.B
+        LDA     #$0080
+        STA     BANK.B
+        JSR     ADJUSTLOADSECTOR.W
++       LDA     CHUNK.B
+        AND     #$00FF
+        ASL     A
+        TAX
+        LDA     $80A000.L,X
+        PLX
+        STA     CHUNK.B
+        CMP     #$FFFF
+        RTS
 
 MESSAGE_DOSBOOTING:
         .DB     "Loading Ellipse DOS...",13,0

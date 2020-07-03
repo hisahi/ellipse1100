@@ -61,12 +61,14 @@ ELLIPSE LINEAR FILE SYSTEM (ELFS)
             $016:$017       sectors in chunk table
             $018:$019       number of bytes per chunk number (always $0002
                                     (for Ellipse DOS; only supported value)
+            $01A:$01B       first chunk of DOS.SYS for boot, or $0000 for none
             $020:$02F       file system human-readable name
             $030:$033       total size of the data area (hint; not to be relied on)
                                 $FFFFFFFF if unknown
             $034:$037       free space (hint; not to be relied on)
                                 $FFFFFFFF if unknown
-            $038:$03B       first sector with data (to chunk $0001)
+            $038:$03B       first sector (0 = track 0, sector 0) with data
+                                (to chunk $0001), ignoring track
                                 must start with a root directory
                                 must be even!
 

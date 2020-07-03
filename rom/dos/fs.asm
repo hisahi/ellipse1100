@@ -1488,6 +1488,36 @@ DOSMAYBEENDDIRWRITE:
         PLP
         RTS
 
+; is current file name DOS.SYS? C=1 if so
+DOSTESTSYSFILE:
+        LDA     DIRCHUNKCACHE+2.W,X
+        CMP     DOSBANKC|DOSTESTSYSFILECMP+2.L
+        BNE     +
+        LDA     DIRCHUNKCACHE+4.W,X
+        CMP     DOSBANKC|DOSTESTSYSFILECMP+4.L
+        BNE     +
+        LDA     DIRCHUNKCACHE+6.W,X
+        CMP     DOSBANKC|DOSTESTSYSFILECMP+6.L
+        BNE     +
+        LDA     DIRCHUNKCACHE+8.W,X
+        CMP     DOSBANKC|DOSTESTSYSFILECMP+8.L
+        BNE     +
+        LDA     DIRCHUNKCACHE+10.W,X
+        CMP     DOSBANKC|DOSTESTSYSFILECMP+10.L
+        BNE     +
+        LDA     DIRCHUNKCACHE+12.W,X
+        CMP     DOSBANKC|DOSTESTSYSFILECMP+12.L
+        BNE     +
+        LDA     DIRCHUNKCACHE+14.W,X
+        CMP     DOSBANKC|DOSTESTSYSFILECMP+14.L
+        BNE     +
+        SEC
+        RTS
++       CLC
+        RTS
+DOSTESTSYSFILECMP:
+        .DB     "  DOS       .SYS"
+
 ; X = pointer to current path in bank $80 for currently selected drive
 DOSCURPATHTOX:
         ACC16
@@ -1532,6 +1562,8 @@ DOSALLOWEDTOOPENFILE:
         LDA     DOSTMP1.B
         CMP     #1
         BEQ     +
+        LDA     DOSSKIPRO.B
+        BNE     +
         LDA     DIRCHUNKCACHE.W,X
         AND     #$0100
         BNE     @ERR                    ; cannot open read-only files with W
@@ -1540,11 +1572,8 @@ DOSALLOWEDTOOPENFILE:
         BNE     @ERR                    ; cannot open subdir or deleted
         LDX     #0
         LDY     #OPENFILES
--       ACC8
-        LDA     DOSFILETABLE.W,X
+-       LDA     DOSFILETABLE-1.W,X
         BMI     @SKIP
-        LDA     DOSTMP1.B
-        ACC16
         LDA     DOSFILETABLE+$10.W,X
         CMP     DOSNEXTFILEDIR
         BNE     @SKIP
@@ -1735,6 +1764,7 @@ DOSFLUSHFILE:
 ; cache clear if OK, cache set with error if not
 ; you should also call DOSEXPANDFILENAME and check its C result
 DOSVALIDATEFILENAME:
+        LDA     #0
         ACC8
         PHX
         PHY
@@ -2582,12 +2612,18 @@ DOSALLOCDIRSLOT:
 DOSDOCREATEFILE:
         PHY
         PHX
+        LDA     DOSACTIVEDIR.B
+        JSR     DOSPAGEINACTIVEDIR.W
+        BCS     @ERR
         JSR     DOSVALIDATEFILENAME.W
         BCS     @ERR
         LDA     1,S
         TAX
         JSR     DOSEXPANDFILENAME.W
         BCS     @ERR
+        LDA     DOSACTIVEDIR.B
+        DEC     A
+        STA     DOSTMP9.B
         JSR     DOSALLOCDIRSLOT.W
         BCS     @ERR
         JSR     DOSALLOCATENEWFILECHUNK.W
@@ -2640,7 +2676,16 @@ DOSDOCREATEFILE:
         LDA     DOSTMPX1.B
         STA     DIRCHUNKCACHE+$1E.W,X
 
-        ;JSR     DOSDIRWRITEBACK.W
+        LDA     DOSTMP9.B
+        BNE     +
+        JSR     DOSTESTSYSFILE.W
+        BCC     +
+        LDA     DIRCHUNKCACHE+$1E.W,X
+        STA     FSMBCACHE+$1A.W
+        LDA     #$FFFF
+        STA     DOSFSMBDIRTY.B
+        CLC
++       ;JSR     DOSDIRWRITEBACK.W
 @ERR    PLX
         PLY
         RTS
@@ -2839,6 +2884,15 @@ DOSDODELETEFILE:
         ORA     #$00C0
         STA     DIRCHUNKCACHE.W,X
 
+        PHX
+        LDA     DIRCHUNKCACHE+$1E.W,X
+        CMP     FSMBCACHE+$1A.W
+        BNE     +
+        STZ     FSMBCACHE+$1A.W
+        LDA     #$FFFF
+        STA     DOSFSMBDIRTY.B
++       PLX
+
         LDA     #$FFFF
         STA     DOSADIRDIRTY.B
 ;        JSR     DOSDIRWRITEBACK.W
@@ -2930,6 +2984,14 @@ DOSDORENAMEFILE:
         ADC     #DIRCHUNKCACHE+2.W
         TAY
 
+        LDX     DOSNEXTFILEOFF.B
+        LDA     DIRCHUNKCACHE+$1E.W
+        CMP     FSMBCACHE+$1A.W
+        BNE     +
+        STZ     FSMBCACHE+$1A.W
+        LDA     #$FFFF
+        STA     DOSFSMBDIRTY.B
++
         ACC8
         LDX     #0
 -       LDA     DOSSTRBUF2.W,X
@@ -2940,6 +3002,18 @@ DOSDORENAMEFILE:
         BCC     -
         ACC16
 
+        LDA     DOSTMP9.B
+        CMP     #1
+        BNE     +
+        LDX     DOSNEXTFILEOFF.B
+        JSR     DOSTESTSYSFILE.W
+        BCC     +
+        LDX     DOSNEXTFILEOFF.B
+        LDA     DIRCHUNKCACHE+$1E.W,X
+        STA     FSMBCACHE+$1A.W
+        LDA     #$FFFF
+        STA     DOSFSMBDIRTY.B
++
         ;JMP     DOSDIRWRITEBACK.W
         CLC
         RTS
@@ -3019,13 +3093,16 @@ DOSDOMOVEENT:
         BCS     @ERR
 
         LDA     DOSACTIVEDIR.B
-        STA     DOSTMPX4.B
+        STA     DOSTMP9.B
         JSR     DOSPAGEINACTIVEDIR.W
         BCS     @ERR
 
         JSR     DOSALLOCDIRSLOT.W
         BCS     @ERR
-        STX     DOSTMPX5.B
+        LDA     DOSNEXTFILEDIR.B
+        STA     DOSTMPX4.B
+        LDA     DOSNEXTFILEOFF.B
+        STA     DOSTMPX5.B
 
         LDA     DOSTMPX2.B
         JSR     DOSPAGEINACTIVEDIR.W
@@ -3036,6 +3113,13 @@ DOSDOMOVEENT:
         STA     DIRCHUNKCACHE.W,X
         STA     DOSADIRDIRTY.B
 
+        LDA     DIRCHUNKCACHE+$1E.W,X
+        CMP     FSMBCACHE+$1A.W
+        BNE     +
+        STZ     FSMBCACHE+$1A.W
+        LDA     #$FFFF
+        STA     DOSFSMBDIRTY.B
++
         LDA     DOSTMPX4.B
         JSR     DOSPAGEINACTIVEDIR.W
         BCS     @ERR
@@ -3054,6 +3138,18 @@ DOSDOMOVEENT:
         CPX     #$20
         BCC     -
 
+        LDA     DOSTMP9.B
+        CMP     #1
+        BNE     +
+        LDX     DOSTMPX5.B
+        JSR     DOSTESTSYSFILE.W
+        BCC     +
+        LDX     DOSTMPX5.B
+        LDA     DIRCHUNKCACHE+$1E.W,X
+        STA     FSMBCACHE+$1A.W
+        LDA     #$FFFF
+        STA     DOSFSMBDIRTY.B
++
         CLC
 @ERR:   RTS
 
@@ -3091,7 +3187,7 @@ DOSREMOVEDIRECTORY:
         CMP     DOSACTIVEDIR.B
         BEQ     @NOTEMPTY                       ; cannot remove current dir
         STA     DOSACTIVEDIR.B
-        STA     DOSTMP9.W
+        STA     DOSTMP9.B
         JSR     DOSPAGEINACTIVEDIR.W
         BCC     ++
 +       ACC16
@@ -3107,7 +3203,7 @@ DOSREMOVEDIRECTORY:
         CPX     #$03FF
         BCC     -
 
-        LDX     DOSTMP9.W
+        LDX     DOSTMP9.B
         JSR     DOSNEXTCHUNK.W
         BCS     +
         CPX     #$FFFF

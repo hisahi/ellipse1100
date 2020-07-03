@@ -30,7 +30,7 @@ memopad.img: floppies/memopad.obj
 dos/dossys.obj: dos/*.asm
 	$(AS) $(AFLAGS) -o $@ dos/dos.asm
 DOS.SYS: dos/dossys.obj
-	$(LD) $(LDFLAGS) dossys.lnk $@
+	$(LD) $(LDFLAGS) -b dossys.lnk $@
 floppies/edos.obj: floppies/dos.asm dos/*.asm
 	$(AS) $(AFLAGS) -o $@ $<
 
@@ -50,6 +50,14 @@ dos/format.obj: dos/progs/format.asm
 	$(AS) $(AFLAGS) -o $@ $<
 FORMAT.COM: dos/format.obj
 	$(LD) $(LDFLAGS) -b format.lnk $@
+dos/monitor.obj: dos/progs/monitor.asm
+	$(AS) $(AFLAGS) -o $@ $<
+MONITOR.COM: dos/monitor.obj
+	$(LD) $(LDFLAGS) -b monitor.lnk $@
+dos/sys.obj: dos/progs/sys.asm
+	$(AS) $(AFLAGS) -o $@ $<
+SYS.COM: dos/sys.obj
+	$(LD) $(LDFLAGS) -b sys.lnk $@
 dos/console.obj: dos/console.asm dos/consolec.asm dos/consolef.asm
 	$(AS) $(AFLAGS) -o $@ $<
 CONSOLE.COM: dos/console.obj
@@ -61,7 +69,7 @@ floppies/elfsdisk.obj: floppies/elfsdisk.asm
 elfsdisk.img: makeelfs floppies/elfsdisk.obj floppies/elfsdisk.fs
 	$(LD) $(LDFLAGS) elfsdisk.lnk $@ && ./makeelfs elfsdisk.img floppies/elfsdisk.fs
 edos.img: makeelfs DOS.SYS CONSOLE.COM HELLO.COM TOUCH.COM REBOOT.COM \
-			FORMAT.COM \
+			FORMAT.COM MONITOR.COM SYS.COM \
 			dos/dossys.obj floppies/edos.obj floppies/dos.fs
 	$(LD) $(LDFLAGS) edos.lnk $@ && ./makeelfs edos.img floppies/dos.fs
 

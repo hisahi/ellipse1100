@@ -320,7 +320,8 @@ int write_elfs_fsmb(FILE* floppy)
     buf[1] = (sectorsperctable >> 8) & 0xFF;
     fwrite(buf, 1, 2, floppy);              /* sectors per chunk table */
     fwrite("\002\0", 1, 2, floppy);         /* bytes per chunk num = 2 */
-    fseek(floppy, 6, SEEK_CUR);             /* padding */
+    fwrite("\0\0", 1, 2, floppy);           /* DOS.SYS first chunk */
+    fseek(floppy, 4, SEEK_CUR);             /* padding */
     fwrite(label, 1, 16, floppy);           /* label */
 
     /* 1 sector for FIS, 1 sector for FSMB */
@@ -639,7 +640,7 @@ int directory_add_file(FILE* floppy, ADD_FILE file)
         return fail_perror("cannot open 'file'");
 
     dirpos = ftell(floppy);
-    while ((read = fread(buf, 1, 1024, srcfile)) > 0)
+    while ((read = fread(buf, 1, 1024, srcfile)) > 0 || first_chunk == 0xFFFF)
     {
         if (get_next_free_chunk(floppy, &chunk, &fileindx))
             return fail_puts("disk is full");
@@ -648,6 +649,18 @@ int directory_add_file(FILE* floppy, ADD_FILE file)
         fseek(floppy, fileindx, SEEK_SET);
         fwrite(buf, 1, read, floppy);
         total += read;
+    }
+
+    /* DOS.SYS in root? */
+    if (!strcmp(file.srcfn, "DOS.SYS") && curdirchunk == 1)
+    {
+        unsigned oldpos = ftell(floppy);
+        fseek(floppy, 0x21A, SEEK_SET);
+        buf[0] = first_chunk & 0xFF;
+        buf[1] = (first_chunk >> 8) & 0xFF;
+        fwrite(buf, 1, 2, floppy);
+        fseek(floppy, oldpos, SEEK_SET);
+        printf("adjusting DOS chunk\n");
     }
 
     fclose(srcfile);

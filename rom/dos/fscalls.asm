@@ -27,6 +27,20 @@
 .ACCU 16
 .INDEX 16
 
+DOSPAGEINDIRAPIS:
+        JSR     DOSPAGEINDIR.W
+        PHA
+        PHX
+        PHY
+        ACC8
+        LDA     #(DOSBANKD>>16)
+        STA     DOSIOBANK.B
+        ACC16
+        PLY
+        PLX
+        PLA
+        RTS
+
 DOSPAGEINDIRAPI:
         JSR     DOSPAGEINDIR.W
         PHA
@@ -50,7 +64,7 @@ DOSSETDRIVE:
         PHX
         PHY
         PHA
-        JSR     DOSPAGEINDIRAPI.W
+        JSR     DOSPAGEINDIRAPIS.W
         PLA
         AND     #$1F
         BEQ     @BAD
@@ -253,6 +267,11 @@ DOSOPENFILEALT:
 
 ; $0F = open file
 DOSOPENFILE:
+        PHA
+        LDA     #0
+        STA     DOSLD|DOSSKIPRO.L
+        PLA
+@FROMCREATE:
         PHX
         PHY
         AND     #$FF
@@ -265,6 +284,7 @@ DOSOPENFILE:
         BCS     @ERR
         STA     DOSLD|DOSTMPX2.L
         ENTERDOSRAM
+        STZ     DOSSKIPRO.B
         ACC8
         LDA     #(DOSBANKD>>16)
         STA     DOSIOBANK.B
@@ -491,13 +511,17 @@ DOSCREATEFILE:
         BCS     @ERRM
         PLY
         JSR     DOSDOCREATEFILE.W
+        BCS     @ERRN
+        LDA     #$FF
+        STA     DOSSKIPRO.B
         EXITDOSRAM
         PLA
         PLY
         PLX
-        JMP     DOSOPENFILE.W
+        JSR     DOSMAYBEENDDIRWRITE.W
+        JMP     DOSOPENFILE@FROMCREATE.W
 @ERRM   PLY
-        EXITDOSRAM
+@ERRN   EXITDOSRAM
         PLY
         PLY
         PLX
@@ -555,6 +579,8 @@ DOSRENAMEFILE:
         JSR     DOSPAGEINACTIVEDRIVE.W
         PLX
         BCS     @ERRM
+        LDA     DOSACTIVEDIR.B
+        STA     DOSTMP9.B
         JSR     DOSRESOLVEFILE.W
         BCS     @ERRM
         LDA     4,S ; old Y

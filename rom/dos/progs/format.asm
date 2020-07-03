@@ -79,6 +79,7 @@ BEGINNING:
         ACC8
         STA     CONFIRMDRV.W
         STA     LABELDRV.W
+        STA     CDPATH.W
         ACC16
 
         ; format
@@ -372,6 +373,10 @@ BEGINNING:
         CPX     FMTCTABLESECS.W
         BCC     -
 
+        LDA     #$3000
+        LDX     #CDPATH
+        DOSCALL
+
         LDA     #$1900
         LDX     #FORMATOK
         DOSCALL
@@ -509,6 +514,8 @@ FORMATOK2:
         .DB     " bytes", 13, "   Free space on drive: ", 0
 FORMATOK3:
         .DB     " bytes", 13, 0
+CDPATH:
+        .DB     "$:", $5C, 0
 POWERSOF10:
 .MACRO PO10
         .DW     (10^\1)&$FFFF
